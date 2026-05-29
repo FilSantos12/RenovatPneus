@@ -1,0 +1,254 @@
+import { useState } from 'react';
+import { Search, Eye, Edit, Printer, Plus, AlertTriangle, Check } from 'lucide-react';
+import { mockProducts } from '../data/mockData';
+import { Product } from '../types';
+import { useAuth } from '../contexts/AuthContext';
+
+export function Estoque() {
+  const { user } = useAuth();
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterBrand, setFilterBrand] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+
+  // Get unique brands
+  const brands = Array.from(new Set(mockProducts.map((p) => p.brand))).sort();
+
+  // Filter products
+  const filteredProducts = mockProducts.filter((product) => {
+    const matchesSearch =
+      product.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      product.code.includes(searchTerm) ||
+      product.size.toLowerCase().includes(searchTerm.toLowerCase());
+
+    const matchesBrand = !filterBrand || product.brand === filterBrand;
+
+    let matchesStatus = true;
+    if (filterStatus === 'OK') {
+      matchesStatus = product.quantity >= product.minQuantity;
+    } else if (filterStatus === 'BAIXO') {
+      matchesStatus = product.quantity > 0 && product.quantity < product.minQuantity;
+    } else if (filterStatus === 'ZERADO') {
+      matchesStatus = product.quantity === 0;
+    }
+
+    return matchesSearch && matchesBrand && matchesStatus;
+  });
+
+  const getStatusBadge = (product: Product) => {
+    if (product.quantity === 0) {
+      return (
+        <span className="inline-flex items-center gap-1 px-3 py-1 bg-[#EF4444] text-white text-sm font-medium rounded-lg">
+          <AlertTriangle className="w-4 h-4" />
+          ZERADO
+        </span>
+      );
+    }
+    if (product.quantity < product.minQuantity) {
+      return (
+        <span className="inline-flex items-center gap-1 px-3 py-1 bg-[#FBBF24] text-[#2D2D2D] text-sm font-medium rounded-lg">
+          <AlertTriangle className="w-4 h-4" />
+          BAIXO
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center gap-1 px-3 py-1 bg-[#22C55E] text-white text-sm font-medium rounded-lg">
+        <Check className="w-4 h-4" />
+        OK
+      </span>
+    );
+  };
+
+  return (
+    <div className="p-4 md:p-6 lg:p-8 space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h1 className="text-3xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D] mb-2">
+            Estoque
+          </h1>
+          <p className="text-[#2D2D2D]/60">{filteredProducts.length} produtos encontrados</p>
+        </div>
+        {user?.role === 'ADM' && (
+          <button className="flex items-center gap-2 px-6 py-3 bg-[#F97316] text-white rounded-xl font-medium hover:bg-[#F97316]/90 transition-colors">
+            <Plus className="w-5 h-5" />
+            Cadastrar Novo Pneu
+          </button>
+        )}
+      </div>
+
+      {/* Filters */}
+      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#2D2D2D]/40" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Buscar por nome ou código..."
+              className="w-full h-12 pl-12 pr-4 bg-[#F5F5F5] border-2 border-transparent rounded-xl focus:outline-none focus:border-[#F97316] transition-colors"
+            />
+          </div>
+
+          {/* Brand Filter */}
+          <div>
+            <select
+              value={filterBrand}
+              onChange={(e) => setFilterBrand(e.target.value)}
+              className="w-full h-12 px-4 bg-[#F5F5F5] border-2 border-transparent rounded-xl focus:outline-none focus:border-[#F97316] transition-colors"
+            >
+              <option value="">Todas as marcas</option>
+              {brands.map((brand) => (
+                <option key={brand} value={brand}>
+                  {brand}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Status Filter */}
+          <div>
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="w-full h-12 px-4 bg-[#F5F5F5] border-2 border-transparent rounded-xl focus:outline-none focus:border-[#F97316] transition-colors"
+            >
+              <option value="">Todos os status</option>
+              <option value="OK">OK</option>
+              <option value="BAIXO">Estoque Baixo</option>
+              <option value="ZERADO">Zerado</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Desktop Table */}
+      <div className="hidden lg:block bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-[#111111] text-white">
+                <th className="px-6 py-4 text-left font-medium">Código</th>
+                <th className="px-6 py-4 text-left font-medium">Descrição</th>
+                <th className="px-6 py-4 text-left font-medium">Medida</th>
+                <th className="px-6 py-4 text-left font-medium">Marca</th>
+                <th className="px-6 py-4 text-center font-medium">Qtd.</th>
+                <th className="px-6 py-4 text-center font-medium">Mín.</th>
+                <th className="px-6 py-4 text-center font-medium">Status</th>
+                <th className="px-6 py-4 text-center font-medium">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredProducts.map((product, index) => (
+                <tr
+                  key={product.id}
+                  className={`${
+                    index % 2 === 0 ? 'bg-white' : 'bg-[#F9F9F9]'
+                  } hover:bg-[#F5F5F5] transition-colors`}
+                >
+                  <td className="px-6 py-4 text-[#2D2D2D]/60">{product.code}</td>
+                  <td className="px-6 py-4 font-medium text-[#2D2D2D]">{product.description}</td>
+                  <td className="px-6 py-4 text-[#2D2D2D]">{product.size}</td>
+                  <td className="px-6 py-4 text-[#2D2D2D]">{product.brand}</td>
+                  <td className="px-6 py-4 text-center">
+                    <span className="text-lg font-['Barlow_Condensed'] font-bold text-[#2D2D2D]">
+                      {product.quantity}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-center text-[#2D2D2D]/60">{product.minQuantity}</td>
+                  <td className="px-6 py-4 text-center">{getStatusBadge(product)}</td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center justify-center gap-2">
+                      <button className="p-2 text-[#2D2D2D]/60 hover:text-[#F97316] hover:bg-[#F97316]/10 rounded-lg transition-colors">
+                        <Eye className="w-5 h-5" />
+                      </button>
+                      {user?.role === 'ADM' && (
+                        <button className="p-2 text-[#2D2D2D]/60 hover:text-[#F97316] hover:bg-[#F97316]/10 rounded-lg transition-colors">
+                          <Edit className="w-5 h-5" />
+                        </button>
+                      )}
+                      <button className="p-2 text-[#2D2D2D]/60 hover:text-[#F97316] hover:bg-[#F97316]/10 rounded-lg transition-colors">
+                        <Printer className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Mobile Cards */}
+      <div className="lg:hidden space-y-4">
+        {filteredProducts.map((product) => (
+          <div key={product.id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex-1 min-w-0">
+                <h3 className="font-['Barlow_Condensed'] font-bold text-lg text-[#2D2D2D] mb-1">
+                  {product.description}
+                </h3>
+                <p className="text-sm text-[#2D2D2D]/60">{product.size}</p>
+                <p className="text-sm text-[#2D2D2D] font-medium mt-1">{product.brand}</p>
+              </div>
+              {getStatusBadge(product)}
+            </div>
+
+            <div className="grid grid-cols-3 gap-4 mb-4 p-3 bg-[#F5F5F5] rounded-xl">
+              <div>
+                <p className="text-xs text-[#2D2D2D]/60 mb-1">Quantidade</p>
+                <p className="text-xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D]">
+                  {product.quantity}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-[#2D2D2D]/60 mb-1">Mínimo</p>
+                <p className="text-xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D]/60">
+                  {product.minQuantity}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-[#2D2D2D]/60 mb-1">Código</p>
+                <p className="text-sm text-[#2D2D2D]/60 truncate">{product.code}</p>
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <button className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-[#F5F5F5] text-[#2D2D2D] rounded-xl font-medium hover:bg-[#F97316]/10 hover:text-[#F97316] transition-colors">
+                <Eye className="w-4 h-4" />
+                Ver
+              </button>
+              {user?.role === 'ADM' && (
+                <button className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-[#F5F5F5] text-[#2D2D2D] rounded-xl font-medium hover:bg-[#F97316]/10 hover:text-[#F97316] transition-colors">
+                  <Edit className="w-4 h-4" />
+                  Editar
+                </button>
+              )}
+              <button className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-[#F5F5F5] text-[#2D2D2D] rounded-xl font-medium hover:bg-[#F97316]/10 hover:text-[#F97316] transition-colors">
+                <Printer className="w-4 h-4" />
+                Etiqueta
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Empty State */}
+      {filteredProducts.length === 0 && (
+        <div className="bg-white rounded-2xl p-12 shadow-sm border border-gray-100 text-center">
+          <div className="w-20 h-20 bg-[#F5F5F5] rounded-full flex items-center justify-center mx-auto mb-4">
+            <Search className="w-10 h-10 text-[#2D2D2D]/40" />
+          </div>
+          <h3 className="text-xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D] mb-2">
+            Nenhum produto encontrado
+          </h3>
+          <p className="text-[#2D2D2D]/60">
+            Tente ajustar os filtros de busca
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
