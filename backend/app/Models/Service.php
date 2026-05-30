@@ -8,11 +8,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
- * @property int         $id
- * @property string      $name
+ * @property int $id
+ * @property string $name
  * @property string|null $description
- * @property float       $price
- * @property bool        $active
+ * @property float $price
+ * @property bool $active
  */
 class Service extends Model
 {
@@ -28,7 +28,7 @@ class Service extends Model
     protected function casts(): array
     {
         return [
-            'price'  => 'decimal:2',
+            'price' => 'decimal:2',
             'active' => 'boolean',
         ];
     }

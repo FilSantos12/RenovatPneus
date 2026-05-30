@@ -7,10 +7,10 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * @property int   $id
- * @property int   $sale_id
- * @property int   $product_id
- * @property int   $quantity
+ * @property int $id
+ * @property int $sale_id
+ * @property int $product_id
+ * @property int $quantity
  * @property float $unit_price
  * @property float $subtotal
  */
@@ -29,9 +29,9 @@ class SaleItem extends Model
     protected function casts(): array
     {
         return [
-            'quantity'   => 'integer',
+            'quantity' => 'integer',
             'unit_price' => 'decimal:2',
-            'subtotal'   => 'decimal:2',
+            'subtotal' => 'decimal:2',
         ];
     }
 

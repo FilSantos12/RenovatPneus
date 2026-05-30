@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\PaymentMethod;
 use App\Enums\SaleStatus;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -11,14 +12,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
- * @property int              $id
- * @property int              $user_id
- * @property string|null      $customer_name
- * @property SaleStatus       $status
- * @property PaymentMethod    $payment_method
- * @property float            $total
- * @property string|null      $notes
- * @property \Carbon\Carbon|null $paid_at
+ * @property int $id
+ * @property int $user_id
+ * @property string|null $customer_name
+ * @property SaleStatus $status
+ * @property PaymentMethod $payment_method
+ * @property float $total
+ * @property string|null $notes
+ * @property Carbon|null $paid_at
  */
 class Sale extends Model
 {
@@ -37,10 +38,10 @@ class Sale extends Model
     protected function casts(): array
     {
         return [
-            'status'         => SaleStatus::class,
+            'status' => SaleStatus::class,
             'payment_method' => PaymentMethod::class,
-            'total'          => 'decimal:2',
-            'paid_at'        => 'datetime',
+            'total' => 'decimal:2',
+            'paid_at' => 'datetime',
         ];
     }
 

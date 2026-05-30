@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
+// Estende o Controller base da camada Api
 use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Resources\UserResource;
 use App\Services\AuthService;
@@ -25,7 +25,7 @@ class AuthController extends Controller
         }
 
         return response()->json([
-            'user'    => new UserResource($user),
+            'user' => new UserResource($user),
             'message' => 'Login realizado com sucesso.',
         ]);
     }

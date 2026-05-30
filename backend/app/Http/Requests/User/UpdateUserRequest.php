@@ -1,13 +1,13 @@
 <?php
 
-namespace App\Http\Requests;
+namespace App\Http\Requests\User;
 
 use App\Enums\UserRole;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rules\Enum;
 use Illuminate\Validation\Rules\Password;
 
-class StoreUserRequest extends FormRequest
+class UpdateUserRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -16,11 +16,13 @@ class StoreUserRequest extends FormRequest
 
     public function rules(): array
     {
+        $userId = $this->route('user')?->id ?? $this->route('user');
+
         return [
             'name' => ['required', 'string', 'max:255'],
-            'username' => ['required', 'string', 'min:3', 'max:30', 'unique:users,username', 'alpha_dash'],
-            'email' => ['nullable', 'email', 'unique:users,email'],
-            'password' => ['required', Password::min(6)],
+            'username' => ['required', 'string', 'min:3', 'max:30', 'alpha_dash', "unique:users,username,{$userId}"],
+            'email' => ['nullable', 'email', "unique:users,email,{$userId}"],
+            'password' => ['nullable', Password::min(6)],
             'role' => ['required', new Enum(UserRole::class)],
             'active' => ['boolean'],
         ];
@@ -35,7 +37,7 @@ class StoreUserRequest extends FormRequest
             'username.max' => 'O nome de usuário deve ter no máximo 30 caracteres.',
             'username.unique' => 'Este nome de usuário já está em uso.',
             'username.alpha_dash' => 'O nome de usuário só pode ter letras, números, hífen e underscore.',
-            'password.required' => 'A senha é obrigatória.',
+            'email.unique' => 'Este e-mail já está em uso.',
             'role.required' => 'O papel é obrigatório.',
         ];
     }

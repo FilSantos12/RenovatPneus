@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Requests;
+namespace App\Http\Requests\User;
 
 use App\Enums\UserRole;
 use Illuminate\Foundation\Http\FormRequest;
@@ -35,6 +35,7 @@ class StoreUserRequest extends FormRequest
             'username.max' => 'O nome de usuário deve ter no máximo 30 caracteres.',
             'username.unique' => 'Este nome de usuário já está em uso.',
             'username.alpha_dash' => 'O nome de usuário só pode ter letras, números, hífen e underscore.',
+            'email.unique' => 'Este e-mail já está em uso.',
             'password.required' => 'A senha é obrigatória.',
             'role.required' => 'O papel é obrigatório.',
         ];

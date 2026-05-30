@@ -14,30 +14,30 @@ class UserSeeder extends Seeder
     public function run(): void
     {
         User::create([
-            'name'     => 'Administrador',
+            'name' => 'Administrador',
             'username' => 'admin',
-            'email'    => 'admin@renovatpneus.com.br',
+            'email' => 'admin@renovatpneus.com.br',
             'password' => Hash::make('password'),
-            'role'     => UserRole::ADM,
-            'active'   => true,
+            'role' => UserRole::ADM,
+            'active' => true,
         ]);
 
         User::create([
-            'name'     => 'Operador 1',
+            'name' => 'Operador 1',
             'username' => 'operador1',
-            'email'    => 'operador1@renovatpneus.com.br',
+            'email' => 'operador1@renovatpneus.com.br',
             'password' => Hash::make('password'),
-            'role'     => UserRole::OPERADOR,
-            'active'   => true,
+            'role' => UserRole::OPERADOR,
+            'active' => true,
         ]);
 
         User::create([
-            'name'     => 'Operador 2',
+            'name' => 'Operador 2',
             'username' => 'operador2',
-            'email'    => 'operador2@renovatpneus.com.br',
+            'email' => 'operador2@renovatpneus.com.br',
             'password' => Hash::make('password'),
-            'role'     => UserRole::OPERADOR,
-            'active'   => true,
+            'role' => UserRole::OPERADOR,
+            'active' => true,
         ]);
     }
 }

@@ -8,17 +8,17 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
- * @property int         $id
- * @property string      $name
- * @property string      $barcode
+ * @property int $id
+ * @property string $name
+ * @property string $barcode
  * @property string|null $description
  * @property string|null $brand
  * @property string|null $size
- * @property float       $price_cost
- * @property float       $price_sale
- * @property int         $quantity
- * @property int         $min_stock
- * @property bool        $active
+ * @property float $price_cost
+ * @property float $price_sale
+ * @property int $quantity
+ * @property int $min_stock
+ * @property bool $active
  */
 class Product extends Model
 {
@@ -42,9 +42,9 @@ class Product extends Model
         return [
             'price_cost' => 'decimal:2',
             'price_sale' => 'decimal:2',
-            'quantity'   => 'integer',
-            'min_stock'  => 'integer',
-            'active'     => 'boolean',
+            'quantity' => 'integer',
+            'min_stock' => 'integer',
+            'active' => 'boolean',
         ];
     }
 

@@ -8,12 +8,12 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * @property int          $id
- * @property int          $product_id
- * @property int          $user_id
+ * @property int $id
+ * @property int $product_id
+ * @property int $user_id
  * @property MovementType $type
- * @property int          $quantity
- * @property string|null  $notes
+ * @property int $quantity
+ * @property string|null $notes
  */
 class Movement extends Model
 {
@@ -30,7 +30,7 @@ class Movement extends Model
     protected function casts(): array
     {
         return [
-            'type'     => MovementType::class,
+            'type' => MovementType::class,
             'quantity' => 'integer',
         ];
     }
