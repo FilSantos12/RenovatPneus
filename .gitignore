@@ -1,27 +1,40 @@
-# dependencies
-node_modules/
-.pnp
-.pnp.js
+# === FRONTEND ===
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/.env
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
 
-# build output
-dist/
-dist-ssr/
-build/
+# === BACKEND ===
+backend/vendor/
+backend/.env
+backend/storage/logs/*.log
+backend/storage/framework/cache/data/*
+backend/storage/framework/sessions/*
+backend/storage/framework/testing/*
+backend/storage/framework/views/*
+backend/bootstrap/cache/*.php
 
-# env files
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+# === BANCO DE DADOS ===
+backend/database/database.sqlite
 
-# logs
+# === INSTALADOR ===
+installer/dist/
+installer/tools/nssm.exe
+
+# === BACKUPS ===
+backups/
+
+# === LOGS ===
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# editor
+# === EDITOR ===
 .vscode/
 .idea/
 *.suo
@@ -30,6 +43,6 @@ pnpm-debug.log*
 *.sln
 *.sw?
 
-# OS
+# === OS ===
 .DS_Store
 Thumbs.db

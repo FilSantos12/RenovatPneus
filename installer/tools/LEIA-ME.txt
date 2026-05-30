@@ -1,0 +1,8 @@
+Coloque o arquivo nssm.exe nesta pasta antes de compilar o instalador.
+
+Download: https://nssm.cc/download
+Versao recomendada: 2.24 (64-bit)
+
+O nssm.exe e necessario para registrar o servidor Laravel como servico Windows.
+Ele esta na pasta installer/tools/ pois e um executavel de terceiro e nao
+deve ser commitado no repositorio.
