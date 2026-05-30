@@ -7,7 +7,7 @@ use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
-// Senhas de teste: admin/admin123, joao/joao123, ana/ana123
+// Senhas de teste: password (todas)
 // Nunca commitar senhas reais — usar variáveis de ambiente em produção.
 class UserSeeder extends Seeder
 {
@@ -15,24 +15,27 @@ class UserSeeder extends Seeder
     {
         User::create([
             'name'     => 'Administrador',
+            'username' => 'admin',
             'email'    => 'admin@renovatpneus.com.br',
-            'password' => Hash::make('admin123'),
+            'password' => Hash::make('password'),
             'role'     => UserRole::ADM,
             'active'   => true,
         ]);
 
         User::create([
-            'name'     => 'João Silva',
-            'email'    => 'joao@renovatpneus.com.br',
-            'password' => Hash::make('joao123'),
+            'name'     => 'Operador 1',
+            'username' => 'operador1',
+            'email'    => 'operador1@renovatpneus.com.br',
+            'password' => Hash::make('password'),
             'role'     => UserRole::OPERADOR,
             'active'   => true,
         ]);
 
         User::create([
-            'name'     => 'Ana Paula',
-            'email'    => 'ana@renovatpneus.com.br',
-            'password' => Hash::make('ana123'),
+            'name'     => 'Operador 2',
+            'username' => 'operador2',
+            'email'    => 'operador2@renovatpneus.com.br',
+            'password' => Hash::make('password'),
             'role'     => UserRole::OPERADOR,
             'active'   => true,
         ]);

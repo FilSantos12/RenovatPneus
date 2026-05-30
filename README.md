@@ -99,11 +99,11 @@ O instalador fará automaticamente:
 
 ## Credenciais padrão
 
-| E-mail | Senha | Papel |
+| Usuário | Senha | Papel |
 |---|---|---|
-| admin@renovatpneus.com.br | admin123 | ADM |
-| joao@renovatpneus.com.br | joao123 | OPERADOR |
-| ana@renovatpneus.com.br | ana123 | OPERADOR |
+| admin | password | ADM |
+| operador1 | password | OPERADOR |
+| operador2 | password | OPERADOR |
 
 > ⚠️ Trocar as senhas no primeiro acesso!
 
