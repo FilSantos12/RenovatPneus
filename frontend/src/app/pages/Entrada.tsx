@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Search, Plus, Minus, Check, Camera, Loader2 } from 'lucide-react';
 import { useProducts } from '@/hooks/useProducts';
 import { useCreateMovement } from '@/hooks/useMovements';
+import { BarcodeScanner } from '../components/BarcodeScanner/BarcodeScanner';
 import type { Product } from '../types';
 import { extractValidationErrors, getFirstError } from '@/lib/errors';
 import { toast } from 'sonner';
@@ -12,11 +13,23 @@ export function Entrada() {
   const [quantity, setQuantity] = useState(1);
   const [notes, setNotes] = useState('');
   const [showResults, setShowResults] = useState(false);
+  const [scannerOpen, setScannerOpen] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Record<string, string[]>>({});
 
   const { data } = useProducts();
   const products: Product[] = data?.data ?? [];
   const createMovement = useCreateMovement();
+
+  function handleScan(barcode: string) {
+    const product = products.find((p) => p.barcode === barcode);
+    if (product) {
+      setSelectedProduct(product);
+      setScannerOpen(false);
+      toast.success('Produto encontrado!');
+    } else {
+      toast.error(`Produto não encontrado para o código: ${barcode}`);
+    }
+  }
 
   const filteredProducts = products.filter(
     (p) =>
@@ -109,6 +122,7 @@ export function Entrada() {
 
             <button
               type="button"
+              onClick={() => setScannerOpen(true)}
               className="w-full flex items-center justify-center gap-2 py-3 bg-[#111111] text-white rounded-xl font-medium hover:bg-[#111111]/90 transition-colors"
             >
               <Camera className="w-5 h-5" />
@@ -245,6 +259,13 @@ export function Entrada() {
           )}
         </form>
       </div>
+
+      {scannerOpen && (
+        <BarcodeScanner
+          onScan={handleScan}
+          onClose={() => setScannerOpen(false)}
+        />
+      )}
     </div>
   );
 }

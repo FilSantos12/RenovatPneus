@@ -3,6 +3,7 @@ import { Search, Plus, Minus, Check, Camera, AlertCircle, X, Loader2 } from 'luc
 import { useProducts } from '@/hooks/useProducts';
 import { useServices } from '@/hooks/useServices';
 import { useCreateSale } from '@/hooks/useSales';
+import { BarcodeScanner } from '../components/BarcodeScanner/BarcodeScanner';
 import type { Product, Service } from '../types';
 import { extractValidationErrors } from '@/lib/errors';
 import { toast } from 'sonner';
@@ -25,6 +26,7 @@ export function Saida() {
   const [notes, setNotes] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('pix');
   const [showResults, setShowResults] = useState(false);
+  const [scannerOpen, setScannerOpen] = useState(false);
 
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [cartServices, setCartServices] = useState<CartService[]>([]);
@@ -35,6 +37,17 @@ export function Saida() {
 
   const products: Product[] = productsData?.data ?? [];
   const services: Service[] = servicesData?.data ?? [];
+
+  function handleScan(barcode: string) {
+    const product = products.find((p) => p.barcode === barcode);
+    if (product) {
+      setSelectedProduct(product);
+      setScannerOpen(false);
+      toast.success('Produto encontrado!');
+    } else {
+      toast.error(`Produto não encontrado para o código: ${barcode}`);
+    }
+  }
 
   const filteredProducts = products.filter(
     (p) =>
@@ -215,6 +228,7 @@ export function Saida() {
 
             <button
               type="button"
+              onClick={() => setScannerOpen(true)}
               className="w-full flex items-center justify-center gap-2 py-3 bg-[#111111] text-white rounded-xl font-medium hover:bg-[#111111]/90 transition-colors"
             >
               <Camera className="w-5 h-5" />
@@ -497,6 +511,13 @@ export function Saida() {
           )}
         </form>
       </div>
+
+      {scannerOpen && (
+        <BarcodeScanner
+          onScan={handleScan}
+          onClose={() => setScannerOpen(false)}
+        />
+      )}
     </div>
   );
 }

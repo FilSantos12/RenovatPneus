@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { Search, Eye, Edit, Printer, Plus, AlertTriangle, Check, Loader2 } from 'lucide-react';
+import { useNavigate } from 'react-router';
 import { useProducts } from '@/hooks/useProducts';
 import type { Product } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 
 export function Estoque() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterBrand, setFilterBrand] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
@@ -177,7 +179,11 @@ export function Estoque() {
                           <Edit className="w-5 h-5" />
                         </button>
                       )}
-                      <button className="p-2 text-[#2D2D2D]/60 hover:text-[#F97316] hover:bg-[#F97316]/10 rounded-lg transition-colors">
+                      <button
+                        onClick={() => navigate('/etiquetas', { state: { productId: product.id } })}
+                        className="p-2 text-[#2D2D2D]/60 hover:text-[#F97316] hover:bg-[#F97316]/10 rounded-lg transition-colors"
+                        title="Imprimir etiqueta"
+                      >
                         <Printer className="w-5 h-5" />
                       </button>
                     </div>
@@ -234,7 +240,10 @@ export function Estoque() {
                   Editar
                 </button>
               )}
-              <button className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-[#F5F5F5] text-[#2D2D2D] rounded-xl font-medium hover:bg-[#F97316]/10 hover:text-[#F97316] transition-colors">
+              <button
+                onClick={() => navigate('/etiquetas', { state: { productId: product.id } })}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-[#F5F5F5] text-[#2D2D2D] rounded-xl font-medium hover:bg-[#F97316]/10 hover:text-[#F97316] transition-colors"
+              >
                 <Printer className="w-4 h-4" />
                 Etiqueta
               </button>

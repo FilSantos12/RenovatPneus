@@ -1,252 +1,268 @@
-import { useState } from 'react';
-import { Printer, Eye, EyeOff } from 'lucide-react';
-import { toast } from 'sonner';
+import { useRef, useState, useEffect } from 'react'
+import { useReactToPrint } from 'react-to-print'
+import { useLocation } from 'react-router'
+import { useProducts } from '@/hooks/useProducts'
+import { LabelItem } from '../components/Labels/LabelItem'
+import { BarcodeScanner } from '../components/BarcodeScanner/BarcodeScanner'
+import type { Product } from '../types'
+import { Printer, Trash2, ScanLine, Loader2 } from 'lucide-react'
+
+interface LabelEntry {
+  product: Product
+  quantity: number
+}
 
 export function Etiquetas() {
-  const [productName, setProductName] = useState('Pneu Aro 15');
-  const [size, setSize] = useState('195/55 R15');
-  const [brand, setBrand] = useState('Pirelli');
-  const [code, setCode] = useState('7891234567892');
-  const [price, setPrice] = useState('450.00');
-  const [showLogo, setShowLogo] = useState(true);
-  const [labelSize, setLabelSize] = useState<'small' | 'medium' | 'large'>('medium');
-  const [copies, setCopies] = useState(1);
-  const [showPreview, setShowPreview] = useState(true);
+  const printRef = useRef<HTMLDivElement>(null)
+  const [entries, setEntries] = useState<LabelEntry[]>([])
+  const [scannerOpen, setScannerOpen] = useState(false)
+  const [printMode, setPrintMode] = useState<'a4' | 'thermal'>('a4')
+  const [showPrice, setShowPrice] = useState(true)
+  const [showName, setShowName] = useState(true)
 
-  const handlePrint = () => {
-    toast.success(`${copies} etiqueta(s) enviada(s) para impressão!`);
-  };
+  const location = useLocation()
+  const { data: productsData, isLoading } = useProducts()
+  const products: Product[] = productsData?.data ?? []
+
+  const handlePrint = useReactToPrint({
+    contentRef: printRef,
+    pageStyle:
+      printMode === 'a4'
+        ? `@page { size: A4; margin: 10mm; } @media print { body { -webkit-print-color-adjust: exact; } }`
+        : `@page { size: 50mm 30mm; margin: 0; } @media print { body { -webkit-print-color-adjust: exact; } }`,
+  })
+
+  // Pré-carregar produto quando navegado via state (botão de etiqueta no Estoque)
+  useEffect(() => {
+    const productId = location.state?.productId
+    if (!productId || !products.length) return
+    const product = products.find((p) => p.id === productId)
+    if (product) addProduct(product)
+  }, [location.state, products])
+
+  function addProduct(product: Product) {
+    setEntries((prev) => {
+      const existing = prev.find((e) => e.product.id === product.id)
+      if (existing) {
+        return prev.map((e) =>
+          e.product.id === product.id ? { ...e, quantity: e.quantity + 1 } : e
+        )
+      }
+      return [...prev, { product, quantity: 1 }]
+    })
+  }
+
+  function handleScan(barcode: string) {
+    const product = products.find((p) => p.barcode === barcode)
+    if (product) {
+      addProduct(product)
+      setScannerOpen(false)
+    }
+  }
+
+  function removeEntry(productId: number) {
+    setEntries((prev) => prev.filter((e) => e.product.id !== productId))
+  }
+
+  function updateQuantity(productId: number, qty: number) {
+    if (qty < 1) return
+    setEntries((prev) =>
+      prev.map((e) => (e.product.id === productId ? { ...e, quantity: qty } : e))
+    )
+  }
+
+  const labelsToRender = entries.flatMap((e) =>
+    Array.from({ length: e.quantity }, (_, i) => ({
+      key: `${e.product.id}-${i}`,
+      product: e.product,
+    }))
+  )
 
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D] mb-2">
-          Gerar Etiquetas
-        </h1>
-        <p className="text-[#2D2D2D]/60">
-          Configure e imprima etiquetas para seus produtos
-        </p>
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h1 className="text-3xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D] mb-2">
+            Impressão de Etiquetas
+          </h1>
+          <p className="text-[#2D2D2D]/60">
+            Configure e imprima etiquetas para seus produtos
+          </p>
+        </div>
+        <button
+          onClick={() => handlePrint()}
+          disabled={entries.length === 0}
+          className="flex items-center gap-2 px-6 py-3 bg-[#F97316] text-white rounded-xl font-medium hover:bg-[#F97316]/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          <Printer className="w-5 h-5" />
+          Imprimir{labelsToRender.length > 0 ? ` (${labelsToRender.length})` : ''}
+        </button>
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-6">
-        {/* Form */}
-        <div className="space-y-6">
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-            <h2 className="text-xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D] mb-4">
-              Informações da Etiqueta
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        {/* Painel esquerdo: configuração */}
+        <div className="space-y-4">
+
+          {/* Adicionar produtos */}
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 space-y-4">
+            <h2 className="font-['Barlow_Condensed'] font-bold text-lg text-[#2D2D2D]">
+              Adicionar Produtos
             </h2>
 
-            <div className="space-y-4">
-              <div>
-                <label className="block text-[#2D2D2D] font-medium mb-2">
-                  Nome do Produto
-                </label>
-                <input
-                  type="text"
-                  value={productName}
-                  onChange={(e) => setProductName(e.target.value)}
-                  className="w-full h-12 px-4 bg-[#F5F5F5] border-2 border-transparent rounded-xl focus:outline-none focus:border-[#F97316] transition-colors"
-                />
-              </div>
+            <button
+              onClick={() => setScannerOpen(true)}
+              className="w-full flex items-center justify-center gap-2 border-2 border-dashed border-[#F97316] text-[#F97316] rounded-xl py-3 hover:bg-[#F97316]/5 transition-colors font-medium"
+            >
+              <ScanLine className="w-5 h-5" />
+              Escanear código de barras
+            </button>
 
-              <div>
-                <label className="block text-[#2D2D2D] font-medium mb-2">
-                  Medida do Pneu
-                </label>
-                <input
-                  type="text"
-                  value={size}
-                  onChange={(e) => setSize(e.target.value)}
-                  placeholder="Ex: 175/70 R13"
-                  className="w-full h-12 px-4 bg-[#F5F5F5] border-2 border-transparent rounded-xl focus:outline-none focus:border-[#F97316] transition-colors"
-                />
+            {isLoading ? (
+              <div className="flex justify-center py-2">
+                <Loader2 className="w-5 h-5 animate-spin text-[#F97316]" />
               </div>
+            ) : (
+              <select
+                onChange={(e) => {
+                  const product = products.find((p) => p.id === Number(e.target.value))
+                  if (product) addProduct(product)
+                  e.target.value = ''
+                }}
+                className="w-full h-12 px-4 bg-[#F5F5F5] border-2 border-transparent rounded-xl focus:outline-none focus:border-[#F97316] transition-colors text-sm text-[#2D2D2D]"
+                defaultValue=""
+              >
+                <option value="" disabled>Ou selecionar da lista...</option>
+                {products.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            )}
+          </div>
 
-              <div>
-                <label className="block text-[#2D2D2D] font-medium mb-2">
-                  Marca
-                </label>
-                <input
-                  type="text"
-                  value={brand}
-                  onChange={(e) => setBrand(e.target.value)}
-                  className="w-full h-12 px-4 bg-[#F5F5F5] border-2 border-transparent rounded-xl focus:outline-none focus:border-[#F97316] transition-colors"
-                />
-              </div>
+          {/* Configurações de impressão */}
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 space-y-4">
+            <h2 className="font-['Barlow_Condensed'] font-bold text-lg text-[#2D2D2D]">
+              Configurações
+            </h2>
 
-              <div>
-                <label className="block text-[#2D2D2D] font-medium mb-2">
-                  Código de Barras
-                </label>
-                <input
-                  type="text"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                  className="w-full h-12 px-4 bg-[#F5F5F5] border-2 border-transparent rounded-xl focus:outline-none focus:border-[#F97316] transition-colors"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[#2D2D2D] font-medium mb-2">
-                  Preço (opcional)
-                </label>
-                <input
-                  type="text"
-                  value={price}
-                  onChange={(e) => setPrice(e.target.value)}
-                  placeholder="R$ 0,00"
-                  className="w-full h-12 px-4 bg-[#F5F5F5] border-2 border-transparent rounded-xl focus:outline-none focus:border-[#F97316] transition-colors"
-                />
-              </div>
-
-              <div className="flex items-center justify-between p-4 bg-[#F5F5F5] rounded-xl">
-                <span className="text-[#2D2D2D] font-medium">Incluir logo da empresa</span>
+            <div>
+              <label className="text-sm text-[#2D2D2D]/60 block mb-2">Tipo de impressora</label>
+              <div className="flex gap-2">
                 <button
-                  type="button"
-                  onClick={() => setShowLogo(!showLogo)}
-                  className={`relative w-14 h-8 rounded-full transition-colors ${
-                    showLogo ? 'bg-[#F97316]' : 'bg-gray-300'
+                  onClick={() => setPrintMode('a4')}
+                  className={`flex-1 py-2.5 text-sm rounded-xl border-2 font-medium transition-colors ${
+                    printMode === 'a4'
+                      ? 'border-[#F97316] bg-[#F97316]/5 text-[#F97316]'
+                      : 'border-gray-200 text-[#2D2D2D]/60 hover:border-gray-300'
                   }`}
                 >
-                  <span
-                    className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full transition-transform ${
-                      showLogo ? 'translate-x-6' : ''
-                    }`}
-                  />
+                  A4 (comum)
+                </button>
+                <button
+                  onClick={() => setPrintMode('thermal')}
+                  className={`flex-1 py-2.5 text-sm rounded-xl border-2 font-medium transition-colors ${
+                    printMode === 'thermal'
+                      ? 'border-[#F97316] bg-[#F97316]/5 text-[#F97316]'
+                      : 'border-gray-200 text-[#2D2D2D]/60 hover:border-gray-300'
+                  }`}
+                >
+                  Térmica
                 </button>
               </div>
             </div>
+
+            <label className="flex items-center gap-3 text-sm text-[#2D2D2D] cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showName}
+                onChange={(e) => setShowName(e.target.checked)}
+                className="w-4 h-4 rounded"
+              />
+              Mostrar nome do produto
+            </label>
+            <label className="flex items-center gap-3 text-sm text-[#2D2D2D] cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showPrice}
+                onChange={(e) => setShowPrice(e.target.checked)}
+                className="w-4 h-4 rounded"
+              />
+              Mostrar preço de venda
+            </label>
           </div>
 
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-            <h2 className="text-xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D] mb-4">
-              Opções de Impressão
-            </h2>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-[#2D2D2D] font-medium mb-3">
-                  Tamanho da Etiqueta
-                </label>
-                <div className="grid grid-cols-3 gap-3">
-                  {[
-                    { value: 'small', label: 'Pequena', size: '5x3cm' },
-                    { value: 'medium', label: 'Média', size: '10x5cm' },
-                    { value: 'large', label: 'Grande', size: '10x8cm' },
-                  ].map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => setLabelSize(option.value as any)}
-                      className={`p-3 rounded-xl border-2 transition-all ${
-                        labelSize === option.value
-                          ? 'border-[#F97316] bg-[#F97316]/5 text-[#F97316]'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}
-                    >
-                      <div className="font-medium">{option.label}</div>
-                      <div className="text-xs text-[#2D2D2D]/60">{option.size}</div>
-                    </button>
-                  ))}
+          {/* Lista de produtos adicionados */}
+          {entries.length > 0 && (
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 space-y-3">
+              <h2 className="font-['Barlow_Condensed'] font-bold text-lg text-[#2D2D2D]">
+                Produtos selecionados
+              </h2>
+              {entries.map((entry) => (
+                <div key={entry.product.id} className="flex items-center gap-3">
+                  <span className="flex-1 truncate text-sm text-[#2D2D2D]">
+                    {entry.product.name}
+                  </span>
+                  <input
+                    type="number"
+                    min={1}
+                    value={entry.quantity}
+                    onChange={(e) => updateQuantity(entry.product.id, Number(e.target.value))}
+                    className="w-16 h-9 border-2 border-gray-200 rounded-lg px-2 text-center text-sm focus:outline-none focus:border-[#F97316]"
+                  />
+                  <button
+                    onClick={() => removeEntry(entry.product.id)}
+                    className="p-1.5 text-[#EF4444]/60 hover:text-[#EF4444] hover:bg-[#EF4444]/10 rounded-lg transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-[#2D2D2D] font-medium mb-2">
-                  Número de Cópias
-                </label>
-                <input
-                  type="number"
-                  value={copies}
-                  onChange={(e) => setCopies(Math.max(1, parseInt(e.target.value) || 1))}
-                  min="1"
-                  className="w-full h-12 px-4 bg-[#F5F5F5] border-2 border-transparent rounded-xl focus:outline-none focus:border-[#F97316] transition-colors"
-                />
-              </div>
+              ))}
             </div>
-          </div>
-
-          {/* Mobile Preview Toggle */}
-          <button
-            onClick={() => setShowPreview(!showPreview)}
-            className="lg:hidden w-full flex items-center justify-center gap-2 py-3 bg-[#111111] text-white rounded-xl font-medium hover:bg-[#111111]/90 transition-colors"
-          >
-            {showPreview ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-            {showPreview ? 'Ocultar' : 'Ver'} Prévia
-          </button>
+          )}
         </div>
 
-        {/* Preview */}
-        {(showPreview || window.innerWidth >= 1024) && (
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-            <h2 className="text-xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D] mb-4">
-              Prévia da Etiqueta
-            </h2>
+        {/* Painel direito: pré-visualização */}
+        <div className="lg:col-span-2">
+          <div className="bg-[#F5F5F5] rounded-2xl border border-gray-200 p-4 min-h-64">
+            <p className="text-sm text-[#2D2D2D]/60 mb-3">
+              Pré-visualização —{' '}
+              <span className="font-medium text-[#2D2D2D]">
+                {labelsToRender.length} etiqueta{labelsToRender.length !== 1 ? 's' : ''}
+              </span>
+            </p>
 
-            <div className="flex items-center justify-center p-8 bg-[#F5F5F5] rounded-xl">
-              <div
-                className={`bg-white border-2 border-dashed border-[#2D2D2D]/20 rounded-lg p-4 ${
-                  labelSize === 'small'
-                    ? 'w-48'
-                    : labelSize === 'medium'
-                    ? 'w-64'
-                    : 'w-80'
-                }`}
-              >
-                {showLogo && (
-                  <div className="text-center mb-3">
-                    <div className="inline-block px-3 py-1 bg-[#111111] rounded text-white text-xs font-['Barlow_Condensed'] font-bold">
-                      RENOVAT PNEUS
-                    </div>
-                  </div>
-                )}
-                <div className="text-center space-y-2">
-                  <p className="font-['Barlow_Condensed'] font-bold text-lg">{productName}</p>
-                  <p className="text-[#2D2D2D]/60 text-sm">{size}</p>
-                  <p className="text-[#2D2D2D] font-medium">{brand}</p>
-                  
-                  {/* Barcode Placeholder */}
-                  <div className="my-3 bg-white border border-[#2D2D2D]/20">
-                    <div className="h-12 flex items-center justify-center space-x-0.5 px-2">
-                      {Array.from({ length: 12 }).map((_, i) => (
-                        <div
-                          key={i}
-                          className={`${
-                            i % 2 === 0 ? 'w-1' : 'w-0.5'
-                          } h-full bg-[#111111]`}
-                        />
-                      ))}
-                    </div>
-                    <p className="text-xs text-center pb-1">{code}</p>
-                  </div>
-
-                  {price && (
-                    <p className="text-xl font-['Barlow_Condensed'] font-bold text-[#F97316]">
-                      R$ {price}
-                    </p>
-                  )}
+            {/* Área impressa */}
+            <div
+              ref={printRef}
+              className={`flex flex-wrap gap-2 ${printMode === 'a4' ? 'p-2' : 'p-0'}`}
+            >
+              {labelsToRender.map(({ key, product }) => (
+                <LabelItem
+                  key={key}
+                  product={product}
+                  showPrice={showPrice}
+                  showName={showName}
+                />
+              ))}
+              {labelsToRender.length === 0 && (
+                <div className="w-full flex flex-col items-center justify-center py-16 text-[#2D2D2D]/40">
+                  <Printer className="w-10 h-10 mb-3 opacity-30" />
+                  <p className="text-sm">Adicione produtos para visualizar as etiquetas</p>
                 </div>
-              </div>
-            </div>
-
-            <div className="mt-6 p-3 bg-[#FBBF24]/10 border border-[#FBBF24] rounded-xl text-sm text-[#2D2D2D]/80">
-              💡 Certifique-se de que a impressora está conectada antes de imprimir
+              )}
             </div>
           </div>
-        )}
+        </div>
       </div>
 
-      {/* Print Button - Fixed on Mobile */}
-      <div className="lg:relative fixed bottom-0 left-0 right-0 p-4 bg-white lg:bg-transparent border-t lg:border-0 border-gray-100">
-        <button
-          onClick={handlePrint}
-          className="w-full flex items-center justify-center gap-3 py-4 bg-[#F97316] text-white rounded-xl font-medium text-lg hover:bg-[#F97316]/90 transition-colors"
-        >
-          <Printer className="w-6 h-6" />
-          Imprimir Etiqueta
-        </button>
-      </div>
+      {scannerOpen && (
+        <BarcodeScanner
+          onScan={handleScan}
+          onClose={() => setScannerOpen(false)}
+        />
+      )}
     </div>
-  );
+  )
 }
