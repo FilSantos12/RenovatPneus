@@ -8,6 +8,7 @@ export const PRODUCT_KEYS = {
   list: (filters?: ProductFilters) => ['products', 'list', filters] as const,
   detail: (id: number) => ['products', 'detail', id] as const,
   barcode: (code: string) => ['products', 'barcode', code] as const,
+  nextBarcode: ['products', 'next-barcode'] as const,
 }
 
 export function useProducts(filters?: ProductFilters) {
@@ -22,6 +23,16 @@ export function useProduct(id: number) {
     queryKey: PRODUCT_KEYS.detail(id),
     queryFn: () => productService.get(id),
     enabled: !!id,
+  })
+}
+
+export function useNextBarcode(enabled: boolean = true) {
+  return useQuery({
+    queryKey: PRODUCT_KEYS.nextBarcode,
+    queryFn: () => productService.getNextBarcode(),
+    enabled,
+    staleTime: 0,
+    gcTime: 0,
   })
 }
 

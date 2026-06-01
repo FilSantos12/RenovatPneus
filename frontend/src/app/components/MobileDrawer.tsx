@@ -26,16 +26,16 @@ export function MobileDrawer({ open, onClose }: MobileDrawerProps) {
   const location = useLocation();
 
   const menuItems = [
-    { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', roles: ['adm', 'operador'] },
-    { path: '/scanner', icon: Scan, label: 'Escanear', roles: ['adm', 'operador'] },
-    { path: '/estoque', icon: Package, label: 'Estoque', roles: ['adm', 'operador'] },
-    { path: '/entrada', icon: ArrowDownToLine, label: 'Entrada', roles: ['adm', 'operador'] },
-    { path: '/saida', icon: ArrowUpFromLine, label: 'Saída', roles: ['adm', 'operador'] },
-    { path: '/servicos', icon: Wrench, label: 'Serviços', roles: ['adm', 'operador'] },
-    { path: '/etiquetas', icon: Tag, label: 'Etiquetas', roles: ['adm', 'operador'] },
-    { path: '/historico', icon: History, label: 'Histórico', roles: ['adm', 'operador'] },
-    { path: '/financas', icon: DollarSign, label: 'Finanças', roles: ['adm'] },
-    { path: '/usuarios', icon: Users, label: 'Usuários', roles: ['adm'] },
+    { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard',  roles: ['adm', 'operador'] },
+    { path: '/financas',  icon: DollarSign,      label: 'Finanças',   roles: ['adm'] },
+    { path: '/estoque',   icon: Package,          label: 'Estoque',    roles: ['adm', 'operador'] },
+    { path: '/entrada',   icon: ArrowDownToLine,  label: 'Entrada',    roles: ['adm', 'operador'] },
+    { path: '/saida',     icon: ArrowUpFromLine,  label: 'Venda',      roles: ['adm', 'operador'] },
+    { path: '/servicos',  icon: Wrench,           label: 'Serviços',   roles: ['adm', 'operador'] },
+    { path: '/etiquetas', icon: Tag,              label: 'Etiquetas',  roles: ['adm', 'operador'] },
+    { path: '/scanner',   icon: Scan,             label: 'Escanear',   roles: ['adm', 'operador'] },
+    { path: '/historico', icon: History,          label: 'Histórico',  roles: ['adm', 'operador'] },
+    { path: '/usuarios',  icon: Users,            label: 'Usuários',   roles: ['adm'] },
   ];
 
   const filteredMenuItems = menuItems.filter((item) =>

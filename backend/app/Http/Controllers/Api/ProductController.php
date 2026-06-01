@@ -6,6 +6,7 @@ use App\Http\Requests\Product\StoreProductRequest;
 use App\Http\Requests\Product\UpdateProductRequest;
 use App\Http\Resources\ProductCollection;
 use App\Http\Resources\ProductResource;
+use App\Models\BarcodeSequence;
 use App\Models\Product;
 use App\Services\ProductService;
 use Illuminate\Http\JsonResponse;
@@ -14,6 +15,15 @@ use Illuminate\Http\Request;
 class ProductController extends Controller
 {
     public function __construct(private ProductService $service) {}
+
+    public function nextBarcode(): JsonResponse
+    {
+        $this->authorize('create', Product::class);
+
+        return response()->json([
+            'barcode' => BarcodeSequence::peekNext(),
+        ]);
+    }
 
     public function index(Request $request): ProductCollection
     {

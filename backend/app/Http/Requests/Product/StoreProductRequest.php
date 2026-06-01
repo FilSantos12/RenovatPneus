@@ -15,7 +15,7 @@ class StoreProductRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
-            'barcode' => ['required', 'string', 'unique:products,barcode'],
+            'barcode' => ['nullable', 'string', 'unique:products,barcode'],
             'description' => ['nullable', 'string'],
             'brand' => ['nullable', 'string', 'max:100'],
             'size' => ['nullable', 'string', 'max:50'],

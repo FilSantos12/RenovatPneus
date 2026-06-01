@@ -23,7 +23,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/dashboard', [DashboardController::class, 'summary']);
 
-    // Produto por barcode — antes do resource para não conflitar com route model binding
+    // Rotas fixas de produtos ANTES do apiResource (evita conflito com route model binding)
+    Route::get('/products/next-barcode', [ProductController::class, 'nextBarcode']);
     Route::get('/products/barcode/{barcode}', [ProductController::class, 'showByBarcode']);
     Route::apiResource('products', ProductController::class);
 

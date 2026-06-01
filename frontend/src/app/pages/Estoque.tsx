@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Search, Eye, Edit, Printer, Plus, AlertTriangle, Check, Loader2 } from 'lucide-react';
+import { Search, Eye, Edit, Printer, Plus, AlertTriangle, Check, Loader2, Trash2, X, Barcode, Tag, Ruler, DollarSign, Package } from 'lucide-react';
 import { useNavigate } from 'react-router';
-import { useProducts } from '@/hooks/useProducts';
+import { useProducts, useDeleteProduct } from '@/hooks/useProducts';
 import type { Product } from '../types';
 import { useAuth } from '../contexts/AuthContext';
+import { ProductFormModal } from '../components/Products/ProductFormModal';
 
 export function Estoque() {
   const { user } = useAuth();
@@ -12,8 +13,14 @@ export function Estoque() {
   const [filterBrand, setFilterBrand] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
 
+  const [showFormModal, setShowFormModal] = useState(false);
+  const [produtoVisualizando, setProdutoVisualizando] = useState<Product | null>(null);
+  const [produtoEditando, setProdutoEditando] = useState<Product | null>(null);
+  const [produtoExcluindo, setProdutoExcluindo] = useState<Product | null>(null);
+
   const { data, isLoading, isError } = useProducts();
   const products: Product[] = data?.data ?? [];
+  const { mutate: deleteProduct, isPending: isDeleting } = useDeleteProduct();
 
   const brands = Array.from(new Set(products.map((p) => p.brand))).sort();
 
@@ -36,6 +43,14 @@ export function Estoque() {
 
     return matchesSearch && matchesBrand && matchesStatus;
   });
+
+  function handleConfirmDelete() {
+    if (!produtoExcluindo) return;
+    deleteProduct(produtoExcluindo.id, {
+      onSuccess: () => setProdutoExcluindo(null),
+      onError: () => setProdutoExcluindo(null),
+    });
+  }
 
   const getStatusBadge = (product: Product) => {
     if (product.quantity === 0) {
@@ -89,7 +104,10 @@ export function Estoque() {
           <p className="text-[#2D2D2D]/60">{filteredProducts.length} produtos encontrados</p>
         </div>
         {user?.role === 'adm' && (
-          <button className="flex items-center gap-2 px-6 py-3 bg-[#F97316] text-white rounded-xl font-medium hover:bg-[#F97316]/90 transition-colors">
+          <button
+            onClick={() => setShowFormModal(true)}
+            className="flex items-center gap-2 px-6 py-3 bg-[#F97316] text-white rounded-xl font-medium hover:bg-[#F97316]/90 transition-colors"
+          >
             <Plus className="w-5 h-5" />
             Cadastrar Novo Pneu
           </button>
@@ -171,13 +189,30 @@ export function Estoque() {
                   <td className="px-6 py-4 text-center">{getStatusBadge(product)}</td>
                   <td className="px-6 py-4">
                     <div className="flex items-center justify-center gap-2">
-                      <button className="p-2 text-[#2D2D2D]/60 hover:text-[#F97316] hover:bg-[#F97316]/10 rounded-lg transition-colors">
+                      <button
+                        onClick={() => setProdutoVisualizando(product)}
+                        className="p-2 text-[#2D2D2D]/60 hover:text-[#F97316] hover:bg-[#F97316]/10 rounded-lg transition-colors"
+                        title="Visualizar produto"
+                      >
                         <Eye className="w-5 h-5" />
                       </button>
                       {user?.role === 'adm' && (
-                        <button className="p-2 text-[#2D2D2D]/60 hover:text-[#F97316] hover:bg-[#F97316]/10 rounded-lg transition-colors">
-                          <Edit className="w-5 h-5" />
-                        </button>
+                        <>
+                          <button
+                            onClick={() => setProdutoEditando(product)}
+                            className="p-2 text-[#2D2D2D]/60 hover:text-[#F97316] hover:bg-[#F97316]/10 rounded-lg transition-colors"
+                            title="Editar produto"
+                          >
+                            <Edit className="w-5 h-5" />
+                          </button>
+                          <button
+                            onClick={() => setProdutoExcluindo(product)}
+                            className="p-2 text-[#2D2D2D]/60 hover:text-[#EF4444] hover:bg-[#EF4444]/10 rounded-lg transition-colors"
+                            title="Excluir produto"
+                          >
+                            <Trash2 className="w-5 h-5" />
+                          </button>
+                        </>
                       )}
                       <button
                         onClick={() => navigate('/etiquetas', { state: { productId: product.id } })}
@@ -230,15 +265,29 @@ export function Estoque() {
             </div>
 
             <div className="flex gap-2">
-              <button className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-[#F5F5F5] text-[#2D2D2D] rounded-xl font-medium hover:bg-[#F97316]/10 hover:text-[#F97316] transition-colors">
+              <button
+                onClick={() => setProdutoVisualizando(product)}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-[#F5F5F5] text-[#2D2D2D] rounded-xl font-medium hover:bg-[#F97316]/10 hover:text-[#F97316] transition-colors"
+              >
                 <Eye className="w-4 h-4" />
                 Ver
               </button>
               {user?.role === 'adm' && (
-                <button className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-[#F5F5F5] text-[#2D2D2D] rounded-xl font-medium hover:bg-[#F97316]/10 hover:text-[#F97316] transition-colors">
-                  <Edit className="w-4 h-4" />
-                  Editar
-                </button>
+                <>
+                  <button
+                    onClick={() => setProdutoEditando(product)}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-[#F5F5F5] text-[#2D2D2D] rounded-xl font-medium hover:bg-[#F97316]/10 hover:text-[#F97316] transition-colors"
+                  >
+                    <Edit className="w-4 h-4" />
+                    Editar
+                  </button>
+                  <button
+                    onClick={() => setProdutoExcluindo(product)}
+                    className="flex items-center justify-center gap-2 px-4 py-2 bg-[#F5F5F5] text-[#2D2D2D] rounded-xl font-medium hover:bg-[#EF4444]/10 hover:text-[#EF4444] transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </>
               )}
               <button
                 onClick={() => navigate('/etiquetas', { state: { productId: product.id } })}
@@ -261,6 +310,184 @@ export function Estoque() {
             Nenhum produto encontrado
           </h3>
           <p className="text-[#2D2D2D]/60">Tente ajustar os filtros de busca</p>
+        </div>
+      )}
+
+      {/* Modal de Visualização */}
+      {produtoVisualizando && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-xl overflow-hidden">
+            {/* Header */}
+            <div className="bg-[#111111] px-6 py-5 flex items-start justify-between gap-4">
+              <div className="flex-1 min-w-0">
+                <h2 className="text-2xl font-['Barlow_Condensed'] font-bold text-white leading-tight">
+                  {produtoVisualizando.name}
+                </h2>
+                <p className="text-white/60 text-sm mt-1">{produtoVisualizando.brand} — {produtoVisualizando.size}</p>
+              </div>
+              <div className="flex items-center gap-3 flex-shrink-0">
+                {getStatusBadge(produtoVisualizando)}
+                <button
+                  onClick={() => setProdutoVisualizando(null)}
+                  className="w-8 h-8 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 space-y-4">
+              {/* Código de barras */}
+              <div className="flex items-center gap-3 p-3 bg-[#F5F5F5] rounded-xl">
+                <div className="w-9 h-9 bg-white rounded-lg flex items-center justify-center shadow-sm flex-shrink-0">
+                  <Barcode className="w-5 h-5 text-[#2D2D2D]/60" />
+                </div>
+                <div>
+                  <p className="text-xs text-[#2D2D2D]/50 mb-0.5">Código de barras</p>
+                  <p className="font-medium text-[#2D2D2D] font-mono">{produtoVisualizando.barcode ?? '—'}</p>
+                </div>
+              </div>
+
+              {/* Marca e Medida */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex items-center gap-3 p-3 bg-[#F5F5F5] rounded-xl">
+                  <div className="w-9 h-9 bg-white rounded-lg flex items-center justify-center shadow-sm flex-shrink-0">
+                    <Tag className="w-5 h-5 text-[#2D2D2D]/60" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-[#2D2D2D]/50 mb-0.5">Marca</p>
+                    <p className="font-medium text-[#2D2D2D]">{produtoVisualizando.brand || '—'}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-3 bg-[#F5F5F5] rounded-xl">
+                  <div className="w-9 h-9 bg-white rounded-lg flex items-center justify-center shadow-sm flex-shrink-0">
+                    <Ruler className="w-5 h-5 text-[#2D2D2D]/60" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-[#2D2D2D]/50 mb-0.5">Medida</p>
+                    <p className="font-medium text-[#2D2D2D]">{produtoVisualizando.size || '—'}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Preços */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex items-center gap-3 p-3 bg-[#F5F5F5] rounded-xl">
+                  <div className="w-9 h-9 bg-white rounded-lg flex items-center justify-center shadow-sm flex-shrink-0">
+                    <DollarSign className="w-5 h-5 text-[#2D2D2D]/60" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-[#2D2D2D]/50 mb-0.5">Preço de custo</p>
+                    <p className="font-['Barlow_Condensed'] font-bold text-lg text-[#2D2D2D]">
+                      {produtoVisualizando.price_cost != null
+                        ? `R$ ${produtoVisualizando.price_cost.toFixed(2)}`
+                        : '—'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-3 bg-[#22C55E]/10 rounded-xl">
+                  <div className="w-9 h-9 bg-white rounded-lg flex items-center justify-center shadow-sm flex-shrink-0">
+                    <DollarSign className="w-5 h-5 text-[#22C55E]" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-[#22C55E]/70 mb-0.5">Preço de venda</p>
+                    <p className="font-['Barlow_Condensed'] font-bold text-lg text-[#22C55E]">
+                      R$ {produtoVisualizando.price_sale.toFixed(2)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Estoque */}
+              <div className="flex items-center gap-3 p-3 bg-[#F5F5F5] rounded-xl">
+                <div className="w-9 h-9 bg-white rounded-lg flex items-center justify-center shadow-sm flex-shrink-0">
+                  <Package className="w-5 h-5 text-[#2D2D2D]/60" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-xs text-[#2D2D2D]/50 mb-1">Estoque</p>
+                  <div className="flex items-center gap-4">
+                    <div>
+                      <span className="font-['Barlow_Condensed'] font-bold text-2xl text-[#2D2D2D]">
+                        {produtoVisualizando.quantity}
+                      </span>
+                      <span className="text-[#2D2D2D]/50 text-sm ml-1">em estoque</span>
+                    </div>
+                    <div className="h-6 w-px bg-[#2D2D2D]/10" />
+                    <div>
+                      <span className="font-['Barlow_Condensed'] font-bold text-2xl text-[#2D2D2D]/40">
+                        {produtoVisualizando.min_stock}
+                      </span>
+                      <span className="text-[#2D2D2D]/40 text-sm ml-1">mínimo</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 pb-6">
+              <button
+                onClick={() => setProdutoVisualizando(null)}
+                className="w-full px-4 py-3 rounded-xl bg-gray-200 text-[#2D2D2D] font-medium hover:bg-gray-300 transition-colors"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Cadastro / Edição */}
+      {(showFormModal || produtoEditando) && (
+        <ProductFormModal
+          product={produtoEditando ?? undefined}
+          onClose={() => {
+            setShowFormModal(false);
+            setProdutoEditando(null);
+          }}
+        />
+      )}
+
+      {/* Modal de Confirmação de Exclusão */}
+      {produtoExcluindo && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl">
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-[#EF4444]/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Trash2 className="w-8 h-8 text-[#EF4444]" />
+              </div>
+              <h2 className="text-xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D] mb-2">
+                Excluir produto
+              </h2>
+              <p className="text-[#2D2D2D]/60">
+                Tem certeza que deseja excluir{' '}
+                <strong className="text-[#2D2D2D]">"{produtoExcluindo.name}"</strong>?
+                Esta ação não pode ser desfeita.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setProdutoExcluindo(null)}
+                disabled={isDeleting}
+                className="flex-1 px-4 py-3 rounded-xl bg-gray-200 text-[#2D2D2D] font-medium hover:bg-gray-300 transition-colors disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#EF4444] text-white font-medium hover:bg-[#EF4444]/90 transition-colors disabled:opacity-50"
+              >
+                {isDeleting ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Trash2 className="w-5 h-5" />
+                )}
+                Excluir
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

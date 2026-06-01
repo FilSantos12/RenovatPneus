@@ -21,6 +21,7 @@ export interface ProductPayload {
   size: string
   price_cost?: number
   price_sale: number
+  quantity?: number
   min_stock: number
   active?: boolean
 }
@@ -64,5 +65,10 @@ export const productService = {
 
   async remove(id: number): Promise<void> {
     await api.delete(`/api/products/${id}`)
+  },
+
+  async getNextBarcode(): Promise<string> {
+    const { data } = await api.get('/api/products/next-barcode')
+    return data.barcode
   },
 }

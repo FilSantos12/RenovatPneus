@@ -2,12 +2,17 @@
 
 namespace App\Services;
 
+use App\Models\BarcodeSequence;
 use App\Models\Product;
 
 class ProductService
 {
     public function store(array $data): Product
     {
+        if (empty($data['barcode'])) {
+            $data['barcode'] = BarcodeSequence::generateNext();
+        }
+
         return Product::create($data);
     }
 

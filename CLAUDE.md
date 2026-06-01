@@ -73,14 +73,14 @@ frontend/
     │   └── barcode.ts          # generateBarcodeSVG via jsbarcode
     ├── services/
     │   ├── auth.service.ts     # login (→ data.user), logout, me (→ data.data)
-    │   ├── product.service.ts  # parseProduct() normaliza price_sale/price_cost para Number
+    │   ├── product.service.ts  # parseProduct(), getNextBarcode() — normaliza decimais para Number
     │   ├── movement.service.ts
     │   ├── sale.service.ts     # parseSale() normaliza total/unit_price/subtotal para Number
     │   ├── service.service.ts  # parseService() normaliza price para Number
     │   ├── user.service.ts
     │   └── dashboard.service.ts
     ├── hooks/
-    │   ├── useProducts.ts
+    │   ├── useProducts.ts      # inclui useNextBarcode() (staleTime:0, gcTime:0)
     │   ├── useMovements.ts
     │   ├── useSales.ts
     │   ├── useServices.ts
@@ -101,19 +101,22 @@ frontend/
         │   └── AuthContext.tsx # Sanctum real — chama /api/me no mount, sem localStorage
         ├── components/
         │   ├── Layout.tsx
-        │   ├── Sidebar.tsx
+        │   ├── Sidebar.tsx         # ordem: Dashboard, Finanças, Estoque, Entrada, Venda, Serviços, Etiquetas, Escanear, Histórico, Usuários
         │   ├── MobileHeader.tsx
-        │   ├── MobileDrawer.tsx
+        │   ├── MobileDrawer.tsx    # mesma ordem do Sidebar.tsx
         │   ├── ProtectedRoute.tsx  # exibe spinner enquanto isLoading=true
         │   ├── BarcodeScanner/
         │   │   └── BarcodeScanner.tsx  # modal câmera (react-zxing) + USB/HID
         │   ├── Labels/
         │   │   └── LabelItem.tsx       # etiqueta 50×30mm com código de barras real
+        │   ├── Products/
+        │   │   └── ProductFormModal.tsx  # modal único criar/editar produto + scanner + barcode preview
+        │   │   └── (view inline em Estoque.tsx)  # modal somente-leitura com detalhes do produto
         │   └── ui/                     # shadcn/ui — não editar diretamente
         └── pages/
             ├── Login.tsx           # navega via useEffect após isAuthenticated=true
             ├── Dashboard.tsx       # usa useDashboard() + useMovements()
-            ├── Estoque.tsx         # usa useProducts(), botão etiqueta navega com state
+            ├── Estoque.tsx         # CRUD completo: visualizar, cadastro, edição, exclusão (ADM), etiqueta
             ├── Entrada.tsx         # usa useCreateMovement(), BarcodeScanner integrado
             ├── Saida.tsx           # usa useCreateSale(), BarcodeScanner integrado
             ├── Scanner.tsx         # usa useProducts() + useCreateMovement()
@@ -175,7 +178,8 @@ backend/
 │   │   ├── Service.php
 │   │   ├── Sale.php
 │   │   ├── SaleItem.php
-│   │   └── SaleService.php
+│   │   ├── SaleService.php
+│   │   └── BarcodeSequence.php  # generateNext() atômico (lockForUpdate) + peekNext()
 │   ├── Policies/
 │   │   ├── UserPolicy.php
 │   │   ├── ProductPolicy.php
@@ -184,13 +188,13 @@ backend/
 │   │   └── SalePolicy.php
 │   └── Services/
 │       ├── AuthService.php      # login por username + check active
-│       ├── ProductService.php
+│       ├── ProductService.php   # store() gera barcode automaticamente se vier vazio
 │       ├── MovementService.php  # lockForUpdate() + DB::transaction
 │       ├── SaleService.php      # reutiliza MovementService para baixa de estoque
 │       ├── UserService.php
 │       └── DashboardService.php
 ├── database/
-│   ├── migrations/              # 11 migrations (users→sale_services + username)
+│   ├── migrations/              # 12 migrations (+ barcode_sequences)
 │   └── seeders/
 │       ├── DatabaseSeeder.php
 │       ├── UserSeeder.php
@@ -239,9 +243,11 @@ Sale.created_at         // não "date"
 
 **Login:** `AuthController::login` retorna `{ user: {...}, message: "..." }` — o service usa `data.user`. Os demais endpoints usam o padrão `{ data: {...} }` do `JsonResource` — usam `data.data`.
 
+**ProductPayload** (product.service.ts): inclui `quantity?: number` para quantidade inicial no cadastro. O campo `barcode` é opcional no payload — se omitido, o backend gera automaticamente via `BarcodeSequence::generateNext()`.
+
 ---
 
-## API — Rotas disponíveis (31 total)
+## API — Rotas disponíveis (32 total)
 
 | Método | Rota | Auth | Role | Descrição |
 |---|---|---|---|---|
@@ -251,6 +257,7 @@ Sale.created_at         // não "date"
 | GET | `/api/me` | ✅ | — | Usuário autenticado |
 | GET | `/api/dashboard` | ✅ | — | Resumo do dia |
 | GET/POST | `/api/products` | ✅ | POST: adm | CRUD de produtos |
+| GET | `/api/products/next-barcode` | ✅ | adm | Preview do próximo código RNV (peekNext) |
 | GET | `/api/products/barcode/{barcode}` | ✅ | — | Busca por código de barras |
 | GET/PUT/DELETE | `/api/products/{product}` | ✅ | PUT/DELETE: adm | — |
 | GET/POST | `/api/movements` | ✅ | — | Listagem e criação de movimentações |
@@ -281,6 +288,7 @@ Request → Route → Middleware (auth:sanctum, role)
 - **Estoque insuficiente:** lança `InsufficientStockException` → resposta 422 automática
 - **Movimentação imutável:** `MovementPolicy` retorna `false` para update/delete
 - **Usuário desativado:** `AuthService` verifica `active = true` no login
+- **Barcode interno:** `BarcodeSequence::generateNext()` usa `lockForUpdate()` — sem duplicatas; `peekNext()` só lê (preview sem reservar)
 
 ---
 
@@ -314,12 +322,13 @@ Login por **username** (não email). Email existe na tabela mas não é usado no
 | Tabela | SoftDeletes | Observação |
 |---|---|---|
 | `users` | ✅ | Campo `username` único; `active` para desativar sem deletar |
-| `products` | ✅ | `barcode` único + indexado |
+| `products` | ✅ | `barcode` único + indexado; nullable no store (gerado se vazio) |
 | `movements` | ❌ | Auditoria — nunca apaga |
 | `services` | ✅ | |
 | `sales` | ✅ | |
 | `sale_items` | ❌ | Registro financeiro — nunca apaga |
 | `sale_services` | ❌ | Registro financeiro — nunca apaga |
+| `barcode_sequences` | ❌ | Sempre 1 registro — contador global dos códigos RNV-XXXXXX |
 
 ---
 
@@ -331,14 +340,14 @@ Usa **`createBrowserRouter`**. O Vite dev server serve o `index.html` para todas
 |---|---|---|
 | `/` | Login | — |
 | `/dashboard` | Dashboard | Autenticado |
-| `/scanner` | Scanner | Autenticado |
+| `/financas` | Financas | Autenticado (sidebar: só adm) |
 | `/estoque` | Estoque | Autenticado |
 | `/entrada` | Entrada | Autenticado |
-| `/saida` | Saida | Autenticado |
-| `/etiquetas` | Etiquetas | Autenticado |
-| `/historico` | Historico | Autenticado |
+| `/saida` | Saida | Autenticado (label sidebar: **Venda**) |
 | `/servicos` | Servicos | Autenticado |
-| `/financas` | Financas | Autenticado (sidebar: só adm) |
+| `/etiquetas` | Etiquetas | Autenticado |
+| `/scanner` | Scanner | Autenticado |
+| `/historico` | Historico | Autenticado |
 | `/usuarios` | Usuarios | `requiredRole="adm"` |
 | `/acesso-negado` | AcessoNegado | — |
 
@@ -467,7 +476,10 @@ NSSM 2.24 (x64) em `installer/tools/nssm.exe`.
 | Fase 1 — Backend (Laravel, migrations, models, seeders) | ✅ Concluída |
 | Infra — Laragon + NSSM + Inno Setup | ✅ Concluída |
 | Login por username | ✅ Concluído |
-| Fase 2 — API REST (31 rotas, services, policies, resources) | ✅ Concluída |
+| Fase 2 — API REST (32 rotas, services, policies, resources) | ✅ Concluída |
 | Fase 3 — Integração frontend ↔ backend (Axios + React Query + Sanctum) | ✅ Concluída |
 | Fase 4 — Scanner de código de barras + Impressão de etiquetas | ✅ Concluída |
+| CRUD completo da página Estoque (visualizar, cadastro, edição, exclusão ADM) | ✅ Concluído |
+| Geração automática de barcode interno (RNV-XXXXXX, sequencial atômico) | ✅ Concluído |
+| Sidebar reordenada + "Saída" renomeada para "Venda" | ✅ Concluído |
 | Fase 5 — Testes + build de produção + instalador .exe | ⏳ Pendente |
