@@ -30,13 +30,18 @@ RenovatPneus/
 | Framework | React 18 + TypeScript |
 | Build | Vite 6 |
 | Estilos | Tailwind CSS v4 |
-| Roteamento | React Router v7 — **`createHashRouter`** |
+| Roteamento | React Router v7 — `createBrowserRouter` |
+| HTTP | Axios — `withCredentials: true` (Sanctum cookies) |
+| Cache/estado | TanStack React Query v5 |
 | Componentes UI | Radix UI + shadcn/ui (`src/app/components/ui/`) |
 | Gráficos | Recharts |
 | Notificações | Sonner (toast) |
 | Formulários | React Hook Form |
 | Animações | Motion (Framer Motion) |
 | Ícones | Lucide React |
+| Scanner câmera | react-zxing v3 |
+| Código de barras | jsbarcode |
+| Impressão | react-to-print v3 |
 
 ### Backend (`backend/`)
 
@@ -55,42 +60,68 @@ RenovatPneus/
 
 ```
 frontend/
-├── index.html
-├── vite.config.ts              # base: '/RenovatPneus/' (GitHub Pages)
+├── .env                        # VITE_API_URL= (vazio = usa proxy Vite)
+├── .env.example
+├── vite.config.ts              # proxy /api e /sanctum → localhost:8000, host 0.0.0.0
 ├── package.json
 └── src/
-    ├── main.tsx
+    ├── main.tsx                # QueryClientProvider + App + ReactQueryDevtools
+    ├── lib/
+    │   ├── axios.ts            # instância Axios, interceptor 401
+    │   ├── queryClient.ts      # QueryClient (staleTime 5min, retry 1)
+    │   ├── errors.ts           # extractValidationErrors, getFirstError, getErrorMessage
+    │   └── barcode.ts          # generateBarcodeSVG via jsbarcode
+    ├── services/
+    │   ├── auth.service.ts     # login (→ data.user), logout, me (→ data.data)
+    │   ├── product.service.ts  # parseProduct() normaliza price_sale/price_cost para Number
+    │   ├── movement.service.ts
+    │   ├── sale.service.ts     # parseSale() normaliza total/unit_price/subtotal para Number
+    │   ├── service.service.ts  # parseService() normaliza price para Number
+    │   ├── user.service.ts
+    │   └── dashboard.service.ts
+    ├── hooks/
+    │   ├── useProducts.ts
+    │   ├── useMovements.ts
+    │   ├── useSales.ts
+    │   ├── useServices.ts
+    │   ├── useUsers.ts
+    │   ├── useDashboard.ts
+    │   └── useBarcodeScan.ts   # captura teclado HID (leitor USB) com buffer + timeout
     ├── styles/
-    │   ├── index.css           # Importa fonts, tailwind e theme
+    │   ├── index.css
     │   ├── fonts.css           # Google Fonts (Barlow Condensed + DM Sans)
-    │   ├── tailwind.css        # @import "tailwindcss"
-    │   └── theme.css           # Variáveis CSS da paleta + tipografia
+    │   ├── tailwind.css
+    │   └── theme.css           # variáveis CSS da paleta
     └── app/
-        ├── App.tsx             # Raiz: AuthProvider + RouterProvider + Toaster
-        ├── routes.tsx          # createHashRouter com rotas protegidas
-        ├── types/index.ts      # Tipos TS: User, Product, Movement, Service, Sale...
-        ├── data/mockData.ts    # Dados mock (ainda em uso — backend em integração)
+        ├── App.tsx             # AuthProvider + RouterProvider + Toaster
+        ├── routes.tsx          # createBrowserRouter com rotas protegidas
+        ├── types/index.ts      # tipos alinhados com API (ver seção de tipos)
+        ├── data/mockData.ts    # mock preservado mas não usado nas páginas
         ├── contexts/
-        │   └── AuthContext.tsx # Auth mock via localStorage (temporário)
+        │   └── AuthContext.tsx # Sanctum real — chama /api/me no mount, sem localStorage
         ├── components/
-        │   ├── Layout.tsx      # Sidebar + (MobileHeader + main)
-        │   ├── Sidebar.tsx     # Desktop, sticky
+        │   ├── Layout.tsx
+        │   ├── Sidebar.tsx
         │   ├── MobileHeader.tsx
         │   ├── MobileDrawer.tsx
-        │   ├── ProtectedRoute.tsx
-        │   └── ui/             # shadcn/ui — não editar diretamente
+        │   ├── ProtectedRoute.tsx  # exibe spinner enquanto isLoading=true
+        │   ├── BarcodeScanner/
+        │   │   └── BarcodeScanner.tsx  # modal câmera (react-zxing) + USB/HID
+        │   ├── Labels/
+        │   │   └── LabelItem.tsx       # etiqueta 50×30mm com código de barras real
+        │   └── ui/                     # shadcn/ui — não editar diretamente
         └── pages/
-            ├── Login.tsx
-            ├── Dashboard.tsx
-            ├── Estoque.tsx
-            ├── Entrada.tsx
-            ├── Saida.tsx
-            ├── Scanner.tsx
-            ├── Etiquetas.tsx
-            ├── Historico.tsx
-            ├── Financas.tsx        # Relatórios (ADM)
-            ├── Servicos.tsx        # CRUD de serviços (ADM + OPERADOR)
-            ├── Usuarios.tsx        # Apenas ADM
+            ├── Login.tsx           # navega via useEffect após isAuthenticated=true
+            ├── Dashboard.tsx       # usa useDashboard() + useMovements()
+            ├── Estoque.tsx         # usa useProducts(), botão etiqueta navega com state
+            ├── Entrada.tsx         # usa useCreateMovement(), BarcodeScanner integrado
+            ├── Saida.tsx           # usa useCreateSale(), BarcodeScanner integrado
+            ├── Scanner.tsx         # usa useProducts() + useCreateMovement()
+            ├── Etiquetas.tsx       # LabelsPage: preview, A4/térmica, react-to-print v3
+            ├── Historico.tsx       # usa useMovements()
+            ├── Financas.tsx        # usa useSales() — apenas ADM
+            ├── Servicos.tsx        # usa useServices(), CRUD completo
+            ├── Usuarios.tsx        # usa useUsers(), useToggleUserActive() — apenas ADM
             └── AcessoNegado.tsx
 ```
 
@@ -106,15 +137,37 @@ backend/
 │   │   ├── MovementType.php     # entrada | saida
 │   │   ├── PaymentMethod.php    # dinheiro | cartao_credito | cartao_debito | pix | fiado
 │   │   └── SaleStatus.php       # pendente | pago | cancelado
+│   ├── Exceptions/
+│   │   └── InsufficientStockException.php  # render() → 422
 │   ├── Http/
 │   │   ├── Controllers/Api/
-│   │   │   └── AuthController.php   # login, logout, me
+│   │   │   ├── Controller.php       # base: success(), deleted()
+│   │   │   ├── AuthController.php   # login → { user, message }, logout, me
+│   │   │   ├── DashboardController.php
+│   │   │   ├── ProductController.php
+│   │   │   ├── MovementController.php
+│   │   │   ├── ServiceController.php
+│   │   │   ├── SaleController.php
+│   │   │   └── UserController.php
+│   │   ├── Middleware/
+│   │   │   └── CheckRole.php        # alias 'role' em bootstrap/app.php
 │   │   ├── Requests/
 │   │   │   ├── Auth/LoginRequest.php
-│   │   │   ├── StoreUserRequest.php
-│   │   │   └── UpdateUserRequest.php
+│   │   │   ├── User/StoreUserRequest.php
+│   │   │   ├── User/UpdateUserRequest.php
+│   │   │   ├── Product/StoreProductRequest.php
+│   │   │   ├── Product/UpdateProductRequest.php
+│   │   │   ├── Movement/StoreMovementRequest.php
+│   │   │   ├── Service/StoreServiceRequest.php
+│   │   │   ├── Service/UpdateServiceRequest.php
+│   │   │   ├── Sale/StoreSaleRequest.php
+│   │   │   └── Sale/UpdateSaleStatusRequest.php
 │   │   └── Resources/
-│   │       └── UserResource.php     # id, name, username, role, active
+│   │       ├── UserResource.php + UserCollection.php
+│   │       ├── ProductResource.php + ProductCollection.php
+│   │       ├── MovementResource.php + MovementCollection.php
+│   │       ├── ServiceResource.php + ServiceCollection.php
+│   │       └── SaleResource.php + SaleCollection.php
 │   ├── Models/
 │   │   ├── User.php
 │   │   ├── Product.php
@@ -123,46 +176,111 @@ backend/
 │   │   ├── Sale.php
 │   │   ├── SaleItem.php
 │   │   └── SaleService.php
+│   ├── Policies/
+│   │   ├── UserPolicy.php
+│   │   ├── ProductPolicy.php
+│   │   ├── MovementPolicy.php   # update/delete sempre false — imutável
+│   │   ├── ServicePolicy.php
+│   │   └── SalePolicy.php
 │   └── Services/
-│       └── AuthService.php          # login por username + check active
+│       ├── AuthService.php      # login por username + check active
+│       ├── ProductService.php
+│       ├── MovementService.php  # lockForUpdate() + DB::transaction
+│       ├── SaleService.php      # reutiliza MovementService para baixa de estoque
+│       ├── UserService.php
+│       └── DashboardService.php
 ├── database/
-│   ├── migrations/                  # 11 migrations (users→sale_services + username)
+│   ├── migrations/              # 11 migrations (users→sale_services + username)
 │   └── seeders/
 │       ├── DatabaseSeeder.php
 │       ├── UserSeeder.php
 │       ├── ProductSeeder.php
 │       └── ServiceSeeder.php
 ├── routes/
-│   └── api.php                      # /health, /login, /logout, /me
+│   └── api.php                  # 31 rotas registradas
 ├── config/
-│   └── cors.php                     # supports_credentials: true
+│   └── cors.php                 # supports_credentials: true, allowed_origins: FRONTEND_URL
 └── bootstrap/
-    └── app.php                      # statefulApi() ativo
+    └── app.php                  # statefulApi() + alias 'role'
 ```
 
 ---
 
-## API — Rotas disponíveis
+## Tipos TypeScript (alinhados com a API)
 
-| Método | Rota | Auth | Descrição |
-|---|---|---|---|
-| GET | `/api/health` | Não | Health check |
-| POST | `/api/login` | Não | Login por username |
-| POST | `/api/logout` | Sanctum | Logout |
-| GET | `/api/me` | Sanctum | Usuário autenticado |
+```typescript
+// Roles e enums — sempre lowercase, como o backend retorna
+type UserRole    = 'adm' | 'operador'
+type MovementType = 'entrada' | 'saida'
+type SaleStatus  = 'pendente' | 'pago' | 'cancelado'
+type PaymentMethod = 'dinheiro' | 'cartao_credito' | 'cartao_debito' | 'pix' | 'fiado'
 
-### Exemplo de login
+// Campos de produto
+Product.name        // nome de exibição (não "description")
+Product.barcode     // código de barras (não "code")
+Product.min_stock   // estoque mínimo (não "minQuantity")
+Product.price_sale  // preço de venda
+Product.price_cost  // preço de custo (opcional)
+Product.low_stock   // boolean calculado pelo backend
 
-```bash
-POST /api/login
-{ "username": "admin", "password": "password" }
+// Campos de movimentação (objeto aninhado)
+Movement.product.name   // não "productName"
+Movement.user.name      // não "operator"
+Movement.created_at     // não "date"
 
-# Resposta 200:
-{ "user": { "id": 1, "name": "Administrador", "username": "admin", "role": "adm", "active": true }, "message": "Login realizado com sucesso." }
-
-# Credenciais erradas → 401
-# Campo faltando → 422 com mensagem em português
+// Campos de venda
+Sale.customer_name      // não "client"
+Sale.payment_method     // não "paymentMethod"
+Sale.user.name          // operador
+Sale.created_at         // não "date"
 ```
+
+**Decimais:** O Laravel retorna colunas `decimal`/`float` como **string**. Os services normalizam com `Number()` nas funções `parseProduct()`, `parseService()` e `parseSale()`. Nunca chamar `.toFixed()` diretamente em valores vindos da API sem `Number()`.
+
+**Login:** `AuthController::login` retorna `{ user: {...}, message: "..." }` — o service usa `data.user`. Os demais endpoints usam o padrão `{ data: {...} }` do `JsonResource` — usam `data.data`.
+
+---
+
+## API — Rotas disponíveis (31 total)
+
+| Método | Rota | Auth | Role | Descrição |
+|---|---|---|---|---|
+| GET | `/api/health` | Não | — | Health check |
+| POST | `/api/login` | Não | — | Login por username |
+| POST | `/api/logout` | ✅ | — | Logout |
+| GET | `/api/me` | ✅ | — | Usuário autenticado |
+| GET | `/api/dashboard` | ✅ | — | Resumo do dia |
+| GET/POST | `/api/products` | ✅ | POST: adm | CRUD de produtos |
+| GET | `/api/products/barcode/{barcode}` | ✅ | — | Busca por código de barras |
+| GET/PUT/DELETE | `/api/products/{product}` | ✅ | PUT/DELETE: adm | — |
+| GET/POST | `/api/movements` | ✅ | — | Listagem e criação de movimentações |
+| GET | `/api/movements/{movement}` | ✅ | — | Sem update/delete (imutável) |
+| GET/POST | `/api/services` | ✅ | POST: adm | CRUD de serviços |
+| GET/PUT/DELETE | `/api/services/{service}` | ✅ | PUT/DELETE: adm | — |
+| GET/POST | `/api/sales` | ✅ | — | CRUD de vendas |
+| GET/PUT/DELETE | `/api/sales/{sale}` | ✅ | DELETE: adm | — |
+| PATCH | `/api/sales/{sale}/status` | ✅ | — | Atualizar status da venda |
+| GET/POST | `/api/users` | ✅ | adm | CRUD de usuários |
+| GET/PUT/DELETE | `/api/users/{user}` | ✅ | adm | — |
+| PATCH | `/api/users/{user}/toggle-active` | ✅ | adm | Ativar/desativar usuário |
+
+### Arquitetura em camadas
+
+```
+Request → Route → Middleware (auth:sanctum, role)
+       → Controller (fino, ≤10 linhas/método)
+       → FormRequest (valida)
+       → Service (regra de negócio, transações)
+       → Model → Resource (formata JSON)
+```
+
+### Regras de negócio importantes
+
+- **Estoque:** `MovementService` usa `lockForUpdate()` + `DB::transaction` — sem race condition
+- **Venda:** `SaleService::store` reutiliza `MovementService` para dar baixa por item
+- **Estoque insuficiente:** lança `InsufficientStockException` → resposta 422 automática
+- **Movimentação imutável:** `MovementPolicy` retorna `false` para update/delete
+- **Usuário desativado:** `AuthService` verifica `active = true` no login
 
 ---
 
@@ -170,21 +288,24 @@ POST /api/login
 
 Login por **username** (não email). Email existe na tabela mas não é usado no login.
 
+**Fluxo Sanctum SPA:**
+1. `GET /sanctum/csrf-cookie` — obtém cookie CSRF
+2. `POST /api/login` — autentica, cria sessão
+3. Todas as requisições subsequentes enviam cookie de sessão automaticamente (`withCredentials: true`)
+4. `AuthContext` chama `/api/me` ao montar para restaurar sessão existente
+5. Interceptor 401 redireciona para `/` — exceto quando já em `/` (evita loop no mount)
+
 **Credenciais de teste:**
 
 | Username | Senha | Papel |
 |---|---|---|
-| `admin` | `password` | ADM |
-| `operador1` | `password` | OPERADOR |
-| `operador2` | `password` | OPERADOR |
+| `admin` | `password` | adm |
+| `operador1` | `password` | operador |
+| `operador2` | `password` | operador |
 
 **Papéis:**
-- `ADM` — acesso total (usuários, finanças, exportações)
-- `OPERADOR` — estoque, movimentações, serviços
-
-O `AuthService::login` verifica `active = true` — usuário desativado não consegue entrar.
-
-> O frontend ainda usa `AuthContext.tsx` com mock. A integração com o backend Laravel é a próxima etapa.
+- `adm` — acesso total (usuários, finanças, exportações)
+- `operador` — estoque, movimentações, serviços
 
 ---
 
@@ -204,7 +325,7 @@ O `AuthService::login` verifica `active = true` — usuário desativado não con
 
 ## Roteamento (Frontend)
 
-Usa **`createHashRouter`** — obrigatório para o GitHub Pages. Não trocar para `createBrowserRouter`.
+Usa **`createBrowserRouter`**. O Vite dev server serve o `index.html` para todas as rotas em desenvolvimento.
 
 | Rota | Componente | Proteção |
 |---|---|---|
@@ -217,9 +338,50 @@ Usa **`createHashRouter`** — obrigatório para o GitHub Pages. Não trocar par
 | `/etiquetas` | Etiquetas | Autenticado |
 | `/historico` | Historico | Autenticado |
 | `/servicos` | Servicos | Autenticado |
-| `/financas` | Financas | Autenticado (sidebar: só ADM) |
-| `/usuarios` | Usuarios | `requiredRole="ADM"` |
+| `/financas` | Financas | Autenticado (sidebar: só adm) |
+| `/usuarios` | Usuarios | `requiredRole="adm"` |
 | `/acesso-negado` | AcessoNegado | — |
+
+---
+
+## Scanner de código de barras
+
+### Modo USB/HID (leitor físico)
+O hook `useBarcodeScan` captura teclado com buffer + timeout de 100ms. Leitores HID digitam o código e enviam Enter. Input oculto com `autoFocus` obrigatório.
+
+### Modo câmera (react-zxing v3)
+```typescript
+// API v3 — usa result.rawValue (não result.getText())
+const { ref } = useZxing({
+  onDecodeResult: (result) => handleScan(result.rawValue),
+  paused: mode !== 'camera',  // economiza bateria quando fechado
+})
+```
+
+### Cooldown anti-duplicata
+`lastScanRef` com reset de 2 segundos evita disparo duplo do mesmo código.
+
+---
+
+## Impressão de etiquetas
+
+### react-to-print v3
+```typescript
+// API v3 — contentRef direto (não content: () => ref.current)
+const handlePrint = useReactToPrint({
+  contentRef: printRef,
+  pageStyle: `@page { size: A4; margin: 10mm; }`,
+})
+// retorna função, não { handlePrint }
+handlePrint()
+```
+
+### Tamanhos suportados
+- **A4:** grid automático de etiquetas 50×30mm (189×113px a 96dpi)
+- **Térmica:** `@page { size: 50mm 30mm; margin: 0; }`
+
+### Atalho do Estoque
+Botão de impressora na listagem navega para `/etiquetas` com `state: { productId }`. A página de etiquetas lê o `location.state` no `useEffect` e pré-carrega o produto.
 
 ---
 
@@ -255,7 +417,7 @@ Usa **`createHashRouter`** — obrigatório para o GitHub Pages. Não trocar par
 ```bash
 cd frontend
 npm install
-npm run dev      # localhost:5173
+npm run dev      # localhost:5173 (acessível na rede: 0.0.0.0:5173)
 npm run build    # gera frontend/dist/
 ```
 
@@ -305,5 +467,7 @@ NSSM 2.24 (x64) em `installer/tools/nssm.exe`.
 | Fase 1 — Backend (Laravel, migrations, models, seeders) | ✅ Concluída |
 | Infra — Laragon + NSSM + Inno Setup | ✅ Concluída |
 | Login por username | ✅ Concluído |
-| Fase 2 — API REST (Controllers, Resources, Policies) | 🔄 Em andamento |
-| Integração frontend ↔ backend | ⏳ Pendente |
+| Fase 2 — API REST (31 rotas, services, policies, resources) | ✅ Concluída |
+| Fase 3 — Integração frontend ↔ backend (Axios + React Query + Sanctum) | ✅ Concluída |
+| Fase 4 — Scanner de código de barras + Impressão de etiquetas | ✅ Concluída |
+| Fase 5 — Testes + build de produção + instalador .exe | ⏳ Pendente |
