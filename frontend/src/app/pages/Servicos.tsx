@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Search, Plus, Edit, Trash2, Check, X, Clock, DollarSign } from 'lucide-react';
-import { mockServices } from '../data/mockData';
-import { Service } from '../types';
-import { toast } from 'sonner';
+import { Search, Plus, Edit, Trash2, X, Check, DollarSign, Loader2 } from 'lucide-react';
+import { useServices, useCreateService, useUpdateService, useDeleteService } from '@/hooks/useServices';
+import type { Service } from '../types';
+import { extractValidationErrors, getFirstError } from '@/lib/errors';
 
 export function Servicos() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -12,13 +12,19 @@ export function Servicos() {
     name: '',
     description: '',
     price: '',
-    duration: '',
     active: true,
   });
+  const [validationErrors, setValidationErrors] = useState<Record<string, string[]>>({});
 
-  const filteredServices = mockServices.filter((s) =>
+  const { data, isLoading, isError } = useServices();
+  const services: Service[] = data?.data ?? [];
+  const createService = useCreateService();
+  const updateService = useUpdateService();
+  const deleteService = useDeleteService();
+
+  const filteredServices = services.filter((s) =>
     s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    s.description.toLowerCase().includes(searchTerm.toLowerCase())
+    (s.description ?? '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const handleOpenModal = (service?: Service) => {
@@ -26,70 +32,80 @@ export function Servicos() {
       setEditingService(service);
       setFormData({
         name: service.name,
-        description: service.description,
+        description: service.description ?? '',
         price: service.price.toString(),
-        duration: service.duration.toString(),
         active: service.active,
       });
     } else {
       setEditingService(null);
-      setFormData({
-        name: '',
-        description: '',
-        price: '',
-        duration: '',
-        active: true,
-      });
+      setFormData({ name: '', description: '', price: '', active: true });
     }
+    setValidationErrors({});
     setShowModal(true);
   };
 
   const handleCloseModal = () => {
     setShowModal(false);
     setEditingService(null);
-    setFormData({
-      name: '',
-      description: '',
-      price: '',
-      duration: '',
-      active: true,
-    });
+    setFormData({ name: '', description: '', price: '', active: true });
+    setValidationErrors({});
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setValidationErrors({});
 
-    if (editingService) {
-      toast.success(`Serviço "${formData.name}" atualizado com sucesso!`);
-    } else {
-      toast.success(`Serviço "${formData.name}" cadastrado com sucesso!`);
+    const payload = {
+      name: formData.name,
+      description: formData.description || undefined,
+      price: parseFloat(formData.price),
+      active: formData.active,
+    };
+
+    try {
+      if (editingService) {
+        await updateService.mutateAsync({ id: editingService.id, ...payload });
+      } else {
+        await createService.mutateAsync(payload);
+      }
+      handleCloseModal();
+    } catch (error) {
+      setValidationErrors(extractValidationErrors(error));
     }
-
-    handleCloseModal();
   };
 
-  const handleDelete = (service: Service) => {
+  const handleDelete = async (service: Service) => {
     if (confirm(`Deseja realmente excluir o serviço "${service.name}"?`)) {
-      toast.success(`Serviço "${service.name}" excluído com sucesso!`);
+      await deleteService.mutateAsync(service.id);
     }
   };
 
-  const handleToggleActive = (service: Service) => {
-    const action = service.active ? 'desativado' : 'ativado';
-    toast.success(`Serviço "${service.name}" ${action} com sucesso!`);
-  };
+  const isPending = createService.isPending || updateService.isPending;
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-full min-h-[400px]">
+        <Loader2 className="w-8 h-8 animate-spin text-[#F97316]" />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="p-8 text-center text-[#EF4444]">
+        Erro ao carregar serviços. Tente novamente.
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-6">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D] mb-2">
             Serviços
           </h1>
-          <p className="text-[#2D2D2D]/60">
-            Gerencie os serviços oferecidos
-          </p>
+          <p className="text-[#2D2D2D]/60">Gerencie os serviços oferecidos</p>
         </div>
 
         <button
@@ -101,7 +117,6 @@ export function Servicos() {
         </button>
       </div>
 
-      {/* Search */}
       <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
         <div className="relative">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#2D2D2D]/40" />
@@ -115,7 +130,6 @@ export function Servicos() {
         </div>
       </div>
 
-      {/* Services Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredServices.length === 0 ? (
           <div className="col-span-full bg-white rounded-2xl p-12 text-center shadow-sm border border-gray-100">
@@ -126,9 +140,7 @@ export function Servicos() {
             <div
               key={service.id}
               className={`bg-white rounded-2xl p-6 shadow-sm border transition-all ${
-                service.active
-                  ? 'border-gray-100'
-                  : 'border-gray-200 opacity-60'
+                service.active ? 'border-gray-100' : 'border-gray-200 opacity-60'
               }`}
             >
               <div className="flex items-start justify-between mb-4">
@@ -140,16 +152,15 @@ export function Servicos() {
                     {service.description}
                   </p>
                 </div>
-                <button
-                  onClick={() => handleToggleActive(service)}
-                  className={`ml-2 px-2 py-1 rounded text-xs font-medium transition-colors ${
+                <span
+                  className={`ml-2 px-2 py-1 rounded text-xs font-medium ${
                     service.active
                       ? 'bg-[#22C55E]/10 text-[#22C55E]'
                       : 'bg-gray-200 text-[#2D2D2D]/60'
                   }`}
                 >
                   {service.active ? 'Ativo' : 'Inativo'}
-                </button>
+                </span>
               </div>
 
               <div className="space-y-3 mb-4">
@@ -164,16 +175,6 @@ export function Servicos() {
                     </p>
                   </div>
                 </div>
-
-                <div className="flex items-center gap-2 text-[#2D2D2D]">
-                  <div className="w-8 h-8 bg-[#F97316]/10 rounded-lg flex items-center justify-center">
-                    <Clock className="w-4 h-4 text-[#F97316]" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-[#2D2D2D]/60">Duração</p>
-                    <p className="font-medium">{service.duration} minutos</p>
-                  </div>
-                </div>
               </div>
 
               <div className="flex gap-2 pt-4 border-t border-gray-100">
@@ -186,7 +187,8 @@ export function Servicos() {
                 </button>
                 <button
                   onClick={() => handleDelete(service)}
-                  className="flex items-center justify-center gap-2 px-4 py-2 bg-[#EF4444]/10 text-[#EF4444] rounded-lg font-medium hover:bg-[#EF4444]/20 transition-colors"
+                  disabled={deleteService.isPending}
+                  className="flex items-center justify-center gap-2 px-4 py-2 bg-[#EF4444]/10 text-[#EF4444] rounded-lg font-medium hover:bg-[#EF4444]/20 transition-colors disabled:opacity-50"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -196,7 +198,6 @@ export function Servicos() {
         )}
       </div>
 
-      {/* Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
@@ -213,11 +214,8 @@ export function Servicos() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Name */}
               <div>
-                <label className="block text-[#2D2D2D] font-medium mb-2">
-                  Nome do Serviço *
-                </label>
+                <label className="block text-[#2D2D2D] font-medium mb-2">Nome do Serviço *</label>
                 <input
                   type="text"
                   value={formData.name}
@@ -226,13 +224,13 @@ export function Servicos() {
                   className="w-full h-12 px-4 bg-[#F5F5F5] border-2 border-transparent rounded-xl focus:outline-none focus:border-[#F97316] transition-colors"
                   required
                 />
+                {getFirstError(validationErrors, 'name') && (
+                  <p className="text-[#EF4444] text-sm mt-1">{getFirstError(validationErrors, 'name')}</p>
+                )}
               </div>
 
-              {/* Description */}
               <div>
-                <label className="block text-[#2D2D2D] font-medium mb-2">
-                  Descrição
-                </label>
+                <label className="block text-[#2D2D2D] font-medium mb-2">Descrição</label>
                 <textarea
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
@@ -241,11 +239,8 @@ export function Servicos() {
                 />
               </div>
 
-              {/* Price */}
               <div>
-                <label className="block text-[#2D2D2D] font-medium mb-2">
-                  Preço (R$) *
-                </label>
+                <label className="block text-[#2D2D2D] font-medium mb-2">Preço (R$) *</label>
                 <input
                   type="number"
                   step="0.01"
@@ -255,24 +250,11 @@ export function Servicos() {
                   className="w-full h-12 px-4 bg-[#F5F5F5] border-2 border-transparent rounded-xl focus:outline-none focus:border-[#F97316] transition-colors"
                   required
                 />
+                {getFirstError(validationErrors, 'price') && (
+                  <p className="text-[#EF4444] text-sm mt-1">{getFirstError(validationErrors, 'price')}</p>
+                )}
               </div>
 
-              {/* Duration */}
-              <div>
-                <label className="block text-[#2D2D2D] font-medium mb-2">
-                  Duração (minutos) *
-                </label>
-                <input
-                  type="number"
-                  value={formData.duration}
-                  onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
-                  placeholder="30"
-                  className="w-full h-12 px-4 bg-[#F5F5F5] border-2 border-transparent rounded-xl focus:outline-none focus:border-[#F97316] transition-colors"
-                  required
-                />
-              </div>
-
-              {/* Active */}
               <div className="flex items-center gap-3">
                 <input
                   type="checkbox"
@@ -286,7 +268,6 @@ export function Servicos() {
                 </label>
               </div>
 
-              {/* Actions */}
               <div className="flex gap-3 pt-4">
                 <button
                   type="button"
@@ -297,9 +278,14 @@ export function Servicos() {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#22C55E] text-white font-medium hover:bg-[#22C55E]/90 transition-colors"
+                  disabled={isPending}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#22C55E] text-white font-medium hover:bg-[#22C55E]/90 transition-colors disabled:opacity-50"
                 >
-                  <Check className="w-5 h-5" />
+                  {isPending ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <Check className="w-5 h-5" />
+                  )}
                   {editingService ? 'Atualizar' : 'Cadastrar'}
                 </button>
               </div>

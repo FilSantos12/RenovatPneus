@@ -1,21 +1,27 @@
 import { useState } from 'react';
-import { Search, Plus, Minus, Check, Camera } from 'lucide-react';
-import { mockProducts } from '../data/mockData';
-import { Product } from '../types';
+import { Search, Plus, Minus, Check, Camera, Loader2 } from 'lucide-react';
+import { useProducts } from '@/hooks/useProducts';
+import { useCreateMovement } from '@/hooks/useMovements';
+import type { Product } from '../types';
+import { extractValidationErrors, getFirstError } from '@/lib/errors';
 import { toast } from 'sonner';
 
 export function Entrada() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [quantity, setQuantity] = useState(1);
-  const [supplier, setSupplier] = useState('');
   const [notes, setNotes] = useState('');
   const [showResults, setShowResults] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string[]>>({});
 
-  const filteredProducts = mockProducts.filter(
+  const { data } = useProducts();
+  const products: Product[] = data?.data ?? [];
+  const createMovement = useCreateMovement();
+
+  const filteredProducts = products.filter(
     (p) =>
-      p.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.code.includes(searchTerm) ||
+      p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (p.barcode ?? '').includes(searchTerm) ||
       p.brand.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -25,35 +31,39 @@ export function Entrada() {
     setSearchTerm('');
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!selectedProduct) {
       toast.error('Selecione um produto');
       return;
     }
 
-    toast.success(
-      `Entrada de ${quantity} ${selectedProduct.description} registrada com sucesso!`
-    );
+    setValidationErrors({});
 
-    // Reset form
-    setSelectedProduct(null);
-    setQuantity(1);
-    setSupplier('');
-    setNotes('');
+    try {
+      await createMovement.mutateAsync({
+        product_id: selectedProduct.id,
+        type: 'entrada',
+        quantity,
+        notes: notes || undefined,
+      });
+
+      setSelectedProduct(null);
+      setQuantity(1);
+      setNotes('');
+    } catch (error) {
+      setValidationErrors(extractValidationErrors(error));
+    }
   };
 
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-6">
-      {/* Header */}
       <div>
         <h1 className="text-3xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D] mb-2">
           Registrar Entrada
         </h1>
-        <p className="text-[#2D2D2D]/60">
-          Adicione produtos ao estoque
-        </p>
+        <p className="text-[#2D2D2D]/60">Adicione produtos ao estoque</p>
       </div>
 
       <div className="max-w-3xl mx-auto">
@@ -63,7 +73,7 @@ export function Entrada() {
             <h2 className="text-xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D] mb-4">
               1. Identificar Produto
             </h2>
-            
+
             <div className="relative mb-4">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#2D2D2D]/40" />
               <input
@@ -77,8 +87,7 @@ export function Entrada() {
                 placeholder="Buscar por nome, código ou marca..."
                 className="w-full h-14 pl-12 pr-4 bg-[#F5F5F5] border-2 border-transparent rounded-xl focus:outline-none focus:border-[#22C55E] transition-colors"
               />
-              
-              {/* Search Results */}
+
               {showResults && searchTerm && filteredProducts.length > 0 && (
                 <div className="absolute z-10 w-full mt-2 bg-white rounded-xl shadow-lg border border-gray-100 max-h-64 overflow-y-auto">
                   {filteredProducts.slice(0, 5).map((product) => (
@@ -88,9 +97,9 @@ export function Entrada() {
                       onClick={() => handleProductSelect(product)}
                       className="w-full p-4 text-left hover:bg-[#F5F5F5] transition-colors border-b border-gray-100 last:border-0"
                     >
-                      <p className="font-medium text-[#2D2D2D]">{product.description}</p>
+                      <p className="font-medium text-[#2D2D2D]">{product.name}</p>
                       <p className="text-sm text-[#2D2D2D]/60">
-                        {product.size} - {product.brand} - {product.code}
+                        {product.size} - {product.brand} - {product.barcode ?? 'sem código'}
                       </p>
                     </button>
                   ))}
@@ -106,13 +115,12 @@ export function Entrada() {
               Escanear Código de Barras
             </button>
 
-            {/* Selected Product Preview */}
             {selectedProduct && (
               <div className="mt-6 p-4 bg-[#22C55E]/10 border border-[#22C55E] rounded-xl">
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="font-['Barlow_Condensed'] font-bold text-lg text-[#2D2D2D]">
-                      {selectedProduct.description}
+                      {selectedProduct.name}
                     </p>
                     <p className="text-[#2D2D2D]/60">
                       {selectedProduct.size} - {selectedProduct.brand}
@@ -142,11 +150,8 @@ export function Entrada() {
                 </h2>
 
                 <div className="space-y-4">
-                  {/* Quantity */}
                   <div>
-                    <label className="block text-[#2D2D2D] font-medium mb-3">
-                      Quantidade
-                    </label>
+                    <label className="block text-[#2D2D2D] font-medium mb-3">Quantidade</label>
                     <div className="flex items-center justify-center gap-4">
                       <button
                         type="button"
@@ -171,37 +176,13 @@ export function Entrada() {
                         <Plus className="w-6 h-6" />
                       </button>
                     </div>
+                    {getFirstError(validationErrors, 'quantity') && (
+                      <p className="text-[#EF4444] text-sm mt-2 text-center">
+                        {getFirstError(validationErrors, 'quantity')}
+                      </p>
+                    )}
                   </div>
 
-                  {/* Supplier */}
-                  <div>
-                    <label className="block text-[#2D2D2D] font-medium mb-2">
-                      Fornecedor
-                    </label>
-                    <input
-                      type="text"
-                      value={supplier}
-                      onChange={(e) => setSupplier(e.target.value)}
-                      placeholder="Nome do fornecedor"
-                      className="w-full h-14 px-4 bg-[#F5F5F5] border-2 border-transparent rounded-xl focus:outline-none focus:border-[#22C55E] transition-colors"
-                      required
-                    />
-                  </div>
-
-                  {/* Date */}
-                  <div>
-                    <label className="block text-[#2D2D2D] font-medium mb-2">
-                      Data de Entrada
-                    </label>
-                    <input
-                      type="date"
-                      defaultValue={new Date().toISOString().split('T')[0]}
-                      className="w-full h-14 px-4 bg-[#F5F5F5] border-2 border-transparent rounded-xl focus:outline-none focus:border-[#22C55E] transition-colors"
-                      required
-                    />
-                  </div>
-
-                  {/* Notes */}
                   <div>
                     <label className="block text-[#2D2D2D] font-medium mb-2">
                       Observações (opcional)
@@ -209,34 +190,29 @@ export function Entrada() {
                     <textarea
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
-                      placeholder="Informações adicionais..."
+                      placeholder="Fornecedor, nota fiscal, informações adicionais..."
                       className="w-full h-24 px-4 py-3 bg-[#F5F5F5] border-2 border-transparent rounded-xl focus:outline-none focus:border-[#22C55E] transition-colors resize-none"
                     />
                   </div>
                 </div>
               </div>
 
-              {/* Submit */}
               <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
                 <h2 className="text-xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D] mb-4">
                   3. Confirmar Entrada
                 </h2>
-                
+
                 <div className="p-4 bg-[#F5F5F5] rounded-xl mb-6">
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
                       <span className="text-[#2D2D2D]/60">Produto:</span>
-                      <span className="font-medium text-[#2D2D2D]">{selectedProduct.description}</span>
+                      <span className="font-medium text-[#2D2D2D]">{selectedProduct.name}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-[#2D2D2D]/60">Quantidade:</span>
                       <span className="font-['Barlow_Condensed'] font-bold text-[#22C55E] text-lg">
                         +{quantity}
                       </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-[#2D2D2D]/60">Fornecedor:</span>
-                      <span className="font-medium text-[#2D2D2D]">{supplier || '-'}</span>
                     </div>
                     <div className="flex justify-between pt-2 border-t border-[#2D2D2D]/10">
                       <span className="text-[#2D2D2D]/60">Novo estoque:</span>
@@ -249,10 +225,20 @@ export function Entrada() {
 
                 <button
                   type="submit"
-                  className="w-full flex items-center justify-center gap-2 py-4 bg-[#22C55E] text-white rounded-xl font-medium text-lg hover:bg-[#22C55E]/90 transition-colors"
+                  disabled={createMovement.isPending}
+                  className="w-full flex items-center justify-center gap-2 py-4 bg-[#22C55E] text-white rounded-xl font-medium text-lg hover:bg-[#22C55E]/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Check className="w-6 h-6" />
-                  Confirmar Entrada
+                  {createMovement.isPending ? (
+                    <>
+                      <Loader2 className="w-6 h-6 animate-spin" />
+                      Registrando...
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-6 h-6" />
+                      Confirmar Entrada
+                    </>
+                  )}
                 </button>
               </div>
             </>

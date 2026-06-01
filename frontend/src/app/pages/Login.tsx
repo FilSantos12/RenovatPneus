@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { Eye, EyeOff, User, Lock, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -12,20 +12,26 @@ export function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
 
-  const { login } = useAuth();
+  const { login, isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
+
+  // Navega após o React commitar o estado de autenticação
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [isAuthenticated, isLoading, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(false);
     setLoading(true);
 
-    const success = await login(username, password);
-
-    if (success) {
+    try {
+      await login(username, password);
       toast.success('Login realizado com sucesso!');
-      navigate('/dashboard');
-    } else {
+      // navegação ocorre via useEffect acima
+    } catch {
       setError(true);
       setLoading(false);
       toast.error('Usuário ou senha incorretos');
@@ -176,8 +182,8 @@ export function Login() {
           <div className="mt-8 p-4 bg-[#F5F5F5] rounded-xl">
             <p className="text-sm text-[#2D2D2D]/60 mb-2">Credenciais de demonstração:</p>
             <div className="space-y-1 text-sm text-[#2D2D2D]">
-              <p><strong>Admin:</strong> admin / admin123</p>
-              <p><strong>Operador:</strong> joao / joao123</p>
+              <p><strong>Admin:</strong> admin / password</p>
+              <p><strong>Operador:</strong> operador1 / password</p>
             </div>
           </div>
         </div>

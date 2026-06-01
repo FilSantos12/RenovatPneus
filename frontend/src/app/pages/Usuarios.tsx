@@ -1,30 +1,70 @@
 import { useState } from 'react';
-import { Plus, Edit, UserX, Shield, User as UserIcon } from 'lucide-react';
-import { User } from '../types';
+import { Plus, Edit, UserX, UserCheck, Shield, User as UserIcon, Loader2 } from 'lucide-react';
+import { useUsers, useCreateUser, useToggleUserActive } from '@/hooks/useUsers';
+import type { User } from '../types';
+import { extractValidationErrors, getFirstError } from '@/lib/errors';
 import { toast } from 'sonner';
 
 export function Usuarios() {
   const [showForm, setShowForm] = useState(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    username: '',
+    password: '',
+    password_confirmation: '',
+    role: 'operador' as 'adm' | 'operador',
+  });
+  const [validationErrors, setValidationErrors] = useState<Record<string, string[]>>({});
 
-  const mockUsers: User[] = [
-    { id: '1', name: 'Administrador', username: 'admin', role: 'ADM', active: true },
-    { id: '2', name: 'João Silva', username: 'joao', role: 'OPERADOR', active: true },
-    { id: '3', name: 'Maria Santos', username: 'maria', role: 'OPERADOR', active: false },
-  ];
+  const { data, isLoading, isError } = useUsers();
+  const users: User[] = data?.data ?? [];
+  const createUser = useCreateUser();
+  const toggleActive = useToggleUserActive();
 
-  const handleDeactivate = (user: User) => {
-    toast.success(`Usuário ${user.name} foi desativado`);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setValidationErrors({});
+
+    try {
+      await createUser.mutateAsync(formData);
+      setShowForm(false);
+      setFormData({ name: '', username: '', password: '', password_confirmation: '', role: 'operador' });
+    } catch (error) {
+      setValidationErrors(extractValidationErrors(error));
+    }
   };
+
+  const handleToggleActive = async (user: User) => {
+    const action = user.active ? 'desativar' : 'ativar';
+    if (confirm(`Deseja ${action} o usuário ${user.name}?`)) {
+      await toggleActive.mutateAsync(user.id);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-full min-h-[400px]">
+        <Loader2 className="w-8 h-8 animate-spin text-[#F97316]" />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="p-8 text-center text-[#EF4444]">
+        Erro ao carregar usuários. Tente novamente.
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D] mb-2">
             Gerenciar Usuários
           </h1>
-          <p className="text-[#2D2D2D]/60">{mockUsers.length} usuários cadastrados</p>
+          <p className="text-[#2D2D2D]/60">{users.length} usuários cadastrados</p>
         </div>
         <button
           onClick={() => setShowForm(true)}
@@ -46,9 +86,7 @@ export function Usuarios() {
               <div className="w-10 h-10 bg-[#111111] rounded-lg flex items-center justify-center">
                 <Shield className="w-5 h-5 text-white" />
               </div>
-              <span className="font-['Barlow_Condensed'] font-bold text-lg text-[#111111]">
-                ADM
-              </span>
+              <span className="font-['Barlow_Condensed'] font-bold text-lg text-[#111111]">ADM</span>
             </div>
             <p className="text-sm text-[#2D2D2D]/60 mb-2">Acesso total ao sistema:</p>
             <ul className="text-sm text-[#2D2D2D]/80 space-y-1">
@@ -63,9 +101,7 @@ export function Usuarios() {
               <div className="w-10 h-10 bg-[#F97316] rounded-lg flex items-center justify-center">
                 <UserIcon className="w-5 h-5 text-white" />
               </div>
-              <span className="font-['Barlow_Condensed'] font-bold text-lg text-[#F97316]">
-                OPERADOR
-              </span>
+              <span className="font-['Barlow_Condensed'] font-bold text-lg text-[#F97316]">OPERADOR</span>
             </div>
             <p className="text-sm text-[#2D2D2D]/60 mb-2">Acesso operacional:</p>
             <ul className="text-sm text-[#2D2D2D]/80 space-y-1">
@@ -91,7 +127,7 @@ export function Usuarios() {
               </tr>
             </thead>
             <tbody>
-              {mockUsers.map((user, index) => (
+              {users.map((user, index) => (
                 <tr
                   key={user.id}
                   className={`${
@@ -103,12 +139,12 @@ export function Usuarios() {
                   <td className="px-6 py-4 text-center">
                     <span
                       className={`inline-block px-3 py-1 rounded-lg font-medium text-sm ${
-                        user.role === 'ADM'
+                        user.role === 'adm'
                           ? 'bg-[#111111] text-white'
                           : 'bg-[#F97316] text-white'
                       }`}
                     >
-                      {user.role}
+                      {user.role.toUpperCase()}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-center">
@@ -127,14 +163,17 @@ export function Usuarios() {
                       <button className="p-2 text-[#2D2D2D]/60 hover:text-[#F97316] hover:bg-[#F97316]/10 rounded-lg transition-colors">
                         <Edit className="w-5 h-5" />
                       </button>
-                      {user.active && (
-                        <button
-                          onClick={() => handleDeactivate(user)}
-                          className="p-2 text-[#2D2D2D]/60 hover:text-[#EF4444] hover:bg-[#EF4444]/10 rounded-lg transition-colors"
-                        >
-                          <UserX className="w-5 h-5" />
-                        </button>
-                      )}
+                      <button
+                        onClick={() => handleToggleActive(user)}
+                        disabled={toggleActive.isPending}
+                        className={`p-2 rounded-lg transition-colors ${
+                          user.active
+                            ? 'text-[#2D2D2D]/60 hover:text-[#EF4444] hover:bg-[#EF4444]/10'
+                            : 'text-[#2D2D2D]/60 hover:text-[#22C55E] hover:bg-[#22C55E]/10'
+                        }`}
+                      >
+                        {user.active ? <UserX className="w-5 h-5" /> : <UserCheck className="w-5 h-5" />}
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -146,7 +185,7 @@ export function Usuarios() {
 
       {/* Mobile Cards */}
       <div className="lg:hidden space-y-4">
-        {mockUsers.map((user) => (
+        {users.map((user) => (
           <div key={user.id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
             <div className="flex items-start justify-between mb-3">
               <div>
@@ -158,12 +197,10 @@ export function Usuarios() {
               <div className="flex flex-col gap-2 items-end">
                 <span
                   className={`inline-block px-3 py-1 rounded-lg font-medium text-sm ${
-                    user.role === 'ADM'
-                      ? 'bg-[#111111] text-white'
-                      : 'bg-[#F97316] text-white'
+                    user.role === 'adm' ? 'bg-[#111111] text-white' : 'bg-[#F97316] text-white'
                   }`}
                 >
-                  {user.role}
+                  {user.role.toUpperCase()}
                 </span>
                 <span
                   className={`inline-block px-3 py-1 rounded-lg font-medium text-sm ${
@@ -182,15 +219,18 @@ export function Usuarios() {
                 <Edit className="w-4 h-4" />
                 Editar
               </button>
-              {user.active && (
-                <button
-                  onClick={() => handleDeactivate(user)}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-[#F5F5F5] text-[#2D2D2D] rounded-xl font-medium hover:bg-[#EF4444]/10 hover:text-[#EF4444] transition-colors"
-                >
-                  <UserX className="w-4 h-4" />
-                  Desativar
-                </button>
-              )}
+              <button
+                onClick={() => handleToggleActive(user)}
+                disabled={toggleActive.isPending}
+                className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-[#F5F5F5] text-[#2D2D2D] rounded-xl font-medium transition-colors disabled:opacity-50 ${
+                  user.active
+                    ? 'hover:bg-[#EF4444]/10 hover:text-[#EF4444]'
+                    : 'hover:bg-[#22C55E]/10 hover:text-[#22C55E]'
+                }`}
+              >
+                {user.active ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
+                {user.active ? 'Desativar' : 'Ativar'}
+              </button>
             </div>
           </div>
         ))}
@@ -204,29 +244,41 @@ export function Usuarios() {
               Cadastrar Novo Usuário
             </h3>
 
-            <form className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-[#2D2D2D] font-medium mb-2">Nome Completo</label>
                 <input
                   type="text"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   className="w-full h-12 px-4 bg-[#F5F5F5] border-2 border-transparent rounded-xl focus:outline-none focus:border-[#F97316] transition-colors"
                   required
                 />
+                {getFirstError(validationErrors, 'name') && (
+                  <p className="text-[#EF4444] text-sm mt-1">{getFirstError(validationErrors, 'name')}</p>
+                )}
               </div>
 
               <div>
                 <label className="block text-[#2D2D2D] font-medium mb-2">Nome de Usuário</label>
                 <input
                   type="text"
+                  value={formData.username}
+                  onChange={(e) => setFormData({ ...formData, username: e.target.value })}
                   className="w-full h-12 px-4 bg-[#F5F5F5] border-2 border-transparent rounded-xl focus:outline-none focus:border-[#F97316] transition-colors"
                   required
                 />
+                {getFirstError(validationErrors, 'username') && (
+                  <p className="text-[#EF4444] text-sm mt-1">{getFirstError(validationErrors, 'username')}</p>
+                )}
               </div>
 
               <div>
                 <label className="block text-[#2D2D2D] font-medium mb-2">Senha</label>
                 <input
                   type="password"
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   className="w-full h-12 px-4 bg-[#F5F5F5] border-2 border-transparent rounded-xl focus:outline-none focus:border-[#F97316] transition-colors"
                   required
                 />
@@ -236,16 +288,25 @@ export function Usuarios() {
                 <label className="block text-[#2D2D2D] font-medium mb-2">Confirmar Senha</label>
                 <input
                   type="password"
+                  value={formData.password_confirmation}
+                  onChange={(e) => setFormData({ ...formData, password_confirmation: e.target.value })}
                   className="w-full h-12 px-4 bg-[#F5F5F5] border-2 border-transparent rounded-xl focus:outline-none focus:border-[#F97316] transition-colors"
                   required
                 />
+                {getFirstError(validationErrors, 'password') && (
+                  <p className="text-[#EF4444] text-sm mt-1">{getFirstError(validationErrors, 'password')}</p>
+                )}
               </div>
 
               <div>
                 <label className="block text-[#2D2D2D] font-medium mb-2">Nível de Acesso</label>
-                <select className="w-full h-12 px-4 bg-[#F5F5F5] border-2 border-transparent rounded-xl focus:outline-none focus:border-[#F97316] transition-colors">
-                  <option value="OPERADOR">OPERADOR</option>
-                  <option value="ADM">ADM</option>
+                <select
+                  value={formData.role}
+                  onChange={(e) => setFormData({ ...formData, role: e.target.value as 'adm' | 'operador' })}
+                  className="w-full h-12 px-4 bg-[#F5F5F5] border-2 border-transparent rounded-xl focus:outline-none focus:border-[#F97316] transition-colors"
+                >
+                  <option value="operador">OPERADOR</option>
+                  <option value="adm">ADM</option>
                 </select>
               </div>
 
@@ -259,8 +320,10 @@ export function Usuarios() {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-3 bg-[#F97316] text-white rounded-xl font-medium hover:bg-[#F97316]/90 transition-colors"
+                  disabled={createUser.isPending}
+                  className="flex-1 py-3 bg-[#F97316] text-white rounded-xl font-medium hover:bg-[#F97316]/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                 >
+                  {createUser.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
                   Cadastrar
                 </button>
               </div>

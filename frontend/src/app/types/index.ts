@@ -1,81 +1,106 @@
-export type UserRole = 'ADM' | 'OPERADOR';
+export type UserRole = 'adm' | 'operador'
 
 export interface User {
-  id: string;
-  name: string;
-  username: string;
-  role: UserRole;
-  active: boolean;
+  id: number
+  name: string
+  username: string
+  role: UserRole
+  active: boolean
+  created_at?: string
 }
 
 export interface Product {
-  id: string;
-  code: string;
-  description: string;
-  size: string;
-  brand: string;
-  quantity: number;
-  minQuantity: number;
-  price?: number;
+  id: number
+  name: string
+  barcode?: string
+  description?: string
+  brand: string
+  size: string
+  price_cost?: number
+  price_sale: number
+  quantity: number
+  min_stock: number
+  low_stock: boolean
+  active: boolean
 }
 
-export type MovementType = 'ENTRADA' | 'SAIDA';
+export type MovementType = 'entrada' | 'saida'
 
 export interface Movement {
-  id: string;
-  date: string;
-  productId: string;
-  productName: string;
-  type: MovementType;
-  quantity: number;
-  operator: string;
-  notes?: string;
-  supplier?: string;
-  client?: string;
+  id: number
+  type: MovementType
+  quantity: number
+  notes?: string
+  product: {
+    id: number
+    name: string
+    barcode?: string
+  }
+  user: {
+    id: number
+    name: string
+  }
+  created_at: string
 }
 
-export interface StockStatus {
-  total: number;
-  entriesToday: number;
-  exitsToday: number;
-  lowStock: number;
-}
-
-export interface Service {
-  id: string;
-  name: string;
-  description: string;
-  price: number;
-  duration: number; // em minutos
-  active: boolean;
-}
-
-export interface Sale {
-  id: string;
-  date: string;
-  client: string;
-  items: SaleItem[];
-  services: SaleService[];
-  subtotal: number;
-  discount: number;
-  total: number;
-  operator: string;
-  paymentMethod: 'DINHEIRO' | 'CARTAO_CREDITO' | 'CARTAO_DEBITO' | 'PIX';
-  status: 'CONCLUIDA' | 'CANCELADA';
-}
+export type SaleStatus = 'pendente' | 'pago' | 'cancelado'
+export type PaymentMethod = 'dinheiro' | 'cartao_credito' | 'cartao_debito' | 'pix' | 'fiado'
 
 export interface SaleItem {
-  productId: string;
-  productName: string;
-  quantity: number;
-  unitPrice: number;
-  total: number;
+  id: number
+  product: {
+    id: number
+    name: string
+  }
+  quantity: number
+  unit_price: number
+  subtotal: number
 }
 
 export interface SaleService {
-  serviceId: string;
-  serviceName: string;
-  quantity: number;
-  unitPrice: number;
-  total: number;
+  id: number
+  service: {
+    id: number
+    name: string
+  }
+  quantity: number
+  unit_price: number
+  subtotal: number
+}
+
+export interface Sale {
+  id: number
+  customer_name?: string
+  status: SaleStatus
+  payment_method: PaymentMethod
+  total: number
+  notes?: string
+  paid_at?: string
+  user: {
+    id: number
+    name: string
+  }
+  items: SaleItem[]
+  services: SaleService[]
+  created_at: string
+}
+
+export interface Service {
+  id: number
+  name: string
+  description?: string
+  price: number
+  active: boolean
+}
+
+export interface DashboardSummary {
+  total_products: number
+  total_stock: number
+  low_stock_count: number
+  movements_today: number
+  entries_today: number
+  exits_today: number
+  sales_today: number
+  revenue_today: number
+  low_stock_products: Product[]
 }

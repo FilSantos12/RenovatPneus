@@ -1,40 +1,35 @@
-import { Package, TrendingDown, TrendingUp, AlertTriangle, Plus, Minus, Scan, Printer, Eye } from 'lucide-react';
+import { Package, TrendingDown, TrendingUp, AlertTriangle, Plus, Minus, Scan, Printer, Eye, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { Link } from 'react-router';
-import { mockProducts, mockMovements } from '../data/mockData';
+import { useDashboard } from '@/hooks/useDashboard';
+import { useMovements } from '@/hooks/useMovements';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { format, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 export function Dashboard() {
   const { user } = useAuth();
+  const { data: summary, isLoading: loadingSummary } = useDashboard();
+  const { data: movementsData, isLoading: loadingMovements } = useMovements({ page: 1 });
 
-  // Calculate stats
-  const totalStock = mockProducts.reduce((sum, p) => sum + p.quantity, 0);
-  const lowStock = mockProducts.filter((p) => p.quantity > 0 && p.quantity < p.minQuantity).length;
-  const zeroStock = mockProducts.filter((p) => p.quantity === 0).length;
-
-  const today = new Date();
-  const todayStr = format(today, 'yyyy-MM-dd');
-  const entriesToday = mockMovements.filter(
-    (m) => m.type === 'ENTRADA' && format(new Date(m.date), 'yyyy-MM-dd') === todayStr
-  ).reduce((sum, m) => sum + m.quantity, 0);
-
-  const exitsToday = mockMovements.filter(
-    (m) => m.type === 'SAIDA' && format(new Date(m.date), 'yyyy-MM-dd') === todayStr
-  ).reduce((sum, m) => sum + m.quantity, 0);
+  const movements = movementsData?.data ?? [];
 
   // Chart data for last 7 days
+  const today = new Date();
   const chartData = Array.from({ length: 7 }, (_, i) => {
     const date = subDays(today, 6 - i);
     const dateStr = format(date, 'yyyy-MM-dd');
-    
-    const entries = mockMovements
-      .filter((m) => m.type === 'ENTRADA' && format(new Date(m.date), 'yyyy-MM-dd') === dateStr)
+
+    const dayMovements = movements.filter(
+      (m) => format(new Date(m.created_at), 'yyyy-MM-dd') === dateStr
+    );
+
+    const entries = dayMovements
+      .filter((m) => m.type === 'entrada')
       .reduce((sum, m) => sum + m.quantity, 0);
-    
-    const exits = mockMovements
-      .filter((m) => m.type === 'SAIDA' && format(new Date(m.date), 'yyyy-MM-dd') === dateStr)
+
+    const exits = dayMovements
+      .filter((m) => m.type === 'saida')
       .reduce((sum, m) => sum + m.quantity, 0);
 
     return {
@@ -43,6 +38,14 @@ export function Dashboard() {
       Saídas: exits,
     };
   });
+
+  if (loadingSummary) {
+    return (
+      <div className="flex items-center justify-center h-full min-h-[400px]">
+        <Loader2 className="w-8 h-8 animate-spin text-[#F97316]" />
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-6">
@@ -58,7 +61,6 @@ export function Dashboard() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Total Stock */}
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
           <div className="flex items-start justify-between mb-4">
             <div className="w-12 h-12 bg-[#111111] rounded-xl flex items-center justify-center">
@@ -67,11 +69,10 @@ export function Dashboard() {
           </div>
           <p className="text-[#2D2D2D]/60 text-sm mb-1">Estoque Total</p>
           <p className="text-3xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D]">
-            {totalStock}
+            {summary?.total_stock ?? 0}
           </p>
         </div>
 
-        {/* Entries Today */}
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
           <div className="flex items-start justify-between mb-4">
             <div className="w-12 h-12 bg-[#22C55E] rounded-xl flex items-center justify-center">
@@ -80,11 +81,10 @@ export function Dashboard() {
           </div>
           <p className="text-[#2D2D2D]/60 text-sm mb-1">Entradas Hoje</p>
           <p className="text-3xl font-['Barlow_Condensed'] font-bold text-[#22C55E]">
-            {entriesToday}
+            {summary?.entries_today ?? 0}
           </p>
         </div>
 
-        {/* Exits Today */}
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
           <div className="flex items-start justify-between mb-4">
             <div className="w-12 h-12 bg-[#F97316] rounded-xl flex items-center justify-center">
@@ -93,11 +93,10 @@ export function Dashboard() {
           </div>
           <p className="text-[#2D2D2D]/60 text-sm mb-1">Saídas Hoje</p>
           <p className="text-3xl font-['Barlow_Condensed'] font-bold text-[#F97316]">
-            {exitsToday}
+            {summary?.exits_today ?? 0}
           </p>
         </div>
 
-        {/* Low Stock */}
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
           <div className="flex items-start justify-between mb-4">
             <div className="w-12 h-12 bg-[#EF4444] rounded-xl flex items-center justify-center">
@@ -106,7 +105,7 @@ export function Dashboard() {
           </div>
           <p className="text-[#2D2D2D]/60 text-sm mb-1">Estoque Baixo</p>
           <p className="text-3xl font-['Barlow_Condensed'] font-bold text-[#EF4444]">
-            {lowStock + zeroStock}
+            {summary?.low_stock_count ?? 0}
           </p>
         </div>
       </div>
@@ -175,17 +174,23 @@ export function Dashboard() {
           Movimentações - Últimos 7 dias
         </h2>
         <div className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="date" stroke="#2D2D2D" />
-              <YAxis stroke="#2D2D2D" />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="Entradas" fill="#22C55E" radius={[8, 8, 0, 0]} />
-              <Bar dataKey="Saídas" fill="#F97316" radius={[8, 8, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          {loadingMovements ? (
+            <div className="flex items-center justify-center h-full">
+              <Loader2 className="w-6 h-6 animate-spin text-[#F97316]" />
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="date" stroke="#2D2D2D" />
+                <YAxis stroke="#2D2D2D" />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="Entradas" fill="#22C55E" radius={[8, 8, 0, 0]} />
+                <Bar dataKey="Saídas" fill="#F97316" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </div>
       </div>
 
@@ -195,7 +200,7 @@ export function Dashboard() {
           Últimas Movimentações
         </h2>
         <div className="space-y-3">
-          {mockMovements.slice(0, 5).map((movement) => (
+          {movements.slice(0, 5).map((movement) => (
             <div
               key={movement.id}
               className="flex items-center justify-between p-4 bg-[#F5F5F5] rounded-xl"
@@ -203,12 +208,12 @@ export function Dashboard() {
               <div className="flex items-center gap-4 flex-1">
                 <div
                   className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                    movement.type === 'ENTRADA'
+                    movement.type === 'entrada'
                       ? 'bg-[#22C55E]/10 text-[#22C55E]'
                       : 'bg-[#F97316]/10 text-[#F97316]'
                   }`}
                 >
-                  {movement.type === 'ENTRADA' ? (
+                  {movement.type === 'entrada' ? (
                     <TrendingDown className="w-5 h-5" />
                   ) : (
                     <TrendingUp className="w-5 h-5" />
@@ -216,10 +221,10 @@ export function Dashboard() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-[#2D2D2D] truncate">
-                    {movement.productName}
+                    {movement.product.name}
                   </p>
                   <p className="text-sm text-[#2D2D2D]/60">
-                    {format(new Date(movement.date), "dd/MM/yyyy 'às' HH:mm", {
+                    {format(new Date(movement.created_at), "dd/MM/yyyy 'às' HH:mm", {
                       locale: ptBR,
                     })}
                   </p>
@@ -228,13 +233,13 @@ export function Dashboard() {
               <div className="text-right ml-4">
                 <p
                   className={`text-lg font-['Barlow_Condensed'] font-bold ${
-                    movement.type === 'ENTRADA' ? 'text-[#22C55E]' : 'text-[#F97316]'
+                    movement.type === 'entrada' ? 'text-[#22C55E]' : 'text-[#F97316]'
                   }`}
                 >
-                  {movement.type === 'ENTRADA' ? '+' : '-'}
+                  {movement.type === 'entrada' ? '+' : '-'}
                   {movement.quantity}
                 </p>
-                <p className="text-xs text-[#2D2D2D]/60">{movement.operator}</p>
+                <p className="text-xs text-[#2D2D2D]/60">{movement.user.name}</p>
               </div>
             </div>
           ))}

@@ -1,7 +1,10 @@
 import { useState } from 'react';
-import { Search, Plus, Minus, Check, Camera, AlertCircle, X } from 'lucide-react';
-import { mockProducts, mockServices } from '../data/mockData';
-import { Product, Service } from '../types';
+import { Search, Plus, Minus, Check, Camera, AlertCircle, X, Loader2 } from 'lucide-react';
+import { useProducts } from '@/hooks/useProducts';
+import { useServices } from '@/hooks/useServices';
+import { useCreateSale } from '@/hooks/useSales';
+import type { Product, Service } from '../types';
+import { extractValidationErrors } from '@/lib/errors';
 import { toast } from 'sonner';
 
 interface CartItem {
@@ -20,18 +23,23 @@ export function Saida() {
   const [quantity, setQuantity] = useState(1);
   const [client, setClient] = useState('');
   const [notes, setNotes] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('pix');
   const [showResults, setShowResults] = useState(false);
 
-  // Cart state
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [cartServices, setCartServices] = useState<CartService[]>([]);
-  const [selectedService, setSelectedService] = useState<Service | null>(null);
-  const [serviceQuantity, setServiceQuantity] = useState(1);
 
-  const filteredProducts = mockProducts.filter(
+  const { data: productsData } = useProducts();
+  const { data: servicesData } = useServices();
+  const createSale = useCreateSale();
+
+  const products: Product[] = productsData?.data ?? [];
+  const services: Service[] = servicesData?.data ?? [];
+
+  const filteredProducts = products.filter(
     (p) =>
-      p.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.code.includes(searchTerm) ||
+      p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (p.barcode ?? '').includes(searchTerm) ||
       p.brand.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -52,8 +60,7 @@ export function Saida() {
       return;
     }
 
-    // Check if product already in cart
-    const existingIndex = cartItems.findIndex(item => item.product.id === selectedProduct.id);
+    const existingIndex = cartItems.findIndex((item) => item.product.id === selectedProduct.id);
 
     if (existingIndex >= 0) {
       const updatedCart = [...cartItems];
@@ -69,13 +76,13 @@ export function Saida() {
     setQuantity(1);
   };
 
-  const handleRemoveFromCart = (productId: string) => {
-    setCartItems(cartItems.filter(item => item.product.id !== productId));
+  const handleRemoveFromCart = (productId: number) => {
+    setCartItems(cartItems.filter((item) => item.product.id !== productId));
     toast.success('Produto removido do carrinho');
   };
 
   const handleAddService = (service: Service) => {
-    const existingIndex = cartServices.findIndex(item => item.service.id === service.id);
+    const existingIndex = cartServices.findIndex((item) => item.service.id === service.id);
 
     if (existingIndex >= 0) {
       const updatedServices = [...cartServices];
@@ -88,55 +95,26 @@ export function Saida() {
     }
   };
 
-  const handleRemoveService = (serviceId: string) => {
-    setCartServices(cartServices.filter(item => item.service.id !== serviceId));
+  const handleRemoveService = (serviceId: number) => {
+    setCartServices(cartServices.filter((item) => item.service.id !== serviceId));
     toast.success('Serviço removido');
   };
 
-  const handleUpdateServiceQuantity = (serviceId: string, newQuantity: number) => {
+  const handleUpdateServiceQuantity = (serviceId: number, newQuantity: number) => {
     if (newQuantity < 1) {
       handleRemoveService(serviceId);
       return;
     }
-
-    const updatedServices = cartServices.map(item =>
-      item.service.id === serviceId ? { ...item, quantity: newQuantity } : item
+    setCartServices(
+      cartServices.map((item) =>
+        item.service.id === serviceId ? { ...item, quantity: newQuantity } : item
+      )
     );
-    setCartServices(updatedServices);
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (cartItems.length === 0 && cartServices.length === 0) {
-      toast.error('Adicione pelo menos um produto ou serviço');
-      return;
-    }
-
-    if (!client) {
-      toast.error('Informe o cliente');
-      return;
-    }
-
-    const totalProducts = cartItems.reduce((sum, item) => sum + item.quantity, 0);
-    const totalServicesCount = cartServices.reduce((sum, item) => sum + item.quantity, 0);
-
-    toast.success(
-      `Saída registrada: ${totalProducts} produtos e ${totalServicesCount} serviços`
-    );
-
-    // Reset form
-    setCartItems([]);
-    setCartServices([]);
-    setSelectedProduct(null);
-    setQuantity(1);
-    setClient('');
-    setNotes('');
   };
 
   const calculateTotal = () => {
     const productsTotal = cartItems.reduce(
-      (sum, item) => sum + (item.product.price || 0) * item.quantity,
+      (sum, item) => sum + item.product.price_sale * item.quantity,
       0
     );
     const servicesTotal = cartServices.reduce(
@@ -146,18 +124,52 @@ export function Saida() {
     return productsTotal + servicesTotal;
   };
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (cartItems.length === 0 && cartServices.length === 0) {
+      toast.error('Adicione pelo menos um produto ou serviço');
+      return;
+    }
+
+    try {
+      await createSale.mutateAsync({
+        customer_name: client || undefined,
+        payment_method: paymentMethod,
+        notes: notes || undefined,
+        items: cartItems.map((item) => ({
+          product_id: item.product.id,
+          quantity: item.quantity,
+          unit_price: item.product.price_sale,
+        })),
+        services: cartServices.map((item) => ({
+          service_id: item.service.id,
+          quantity: item.quantity,
+          unit_price: item.service.price,
+        })),
+      });
+
+      setCartItems([]);
+      setCartServices([]);
+      setSelectedProduct(null);
+      setQuantity(1);
+      setClient('');
+      setNotes('');
+      setPaymentMethod('pix');
+    } catch (error) {
+      extractValidationErrors(error);
+    }
+  };
+
   const insufficientStock = selectedProduct && quantity > selectedProduct.quantity;
 
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-6">
-      {/* Header */}
       <div>
         <h1 className="text-3xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D] mb-2">
           Registrar Saída
         </h1>
-        <p className="text-[#2D2D2D]/60">
-          Remova produtos do estoque
-        </p>
+        <p className="text-[#2D2D2D]/60">Remova produtos do estoque</p>
       </div>
 
       <div className="max-w-5xl mx-auto">
@@ -167,7 +179,7 @@ export function Saida() {
             <h2 className="text-xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D] mb-4">
               1. Adicionar Produtos
             </h2>
-            
+
             <div className="relative mb-4">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#2D2D2D]/40" />
               <input
@@ -181,8 +193,7 @@ export function Saida() {
                 placeholder="Buscar por nome, código ou marca..."
                 className="w-full h-14 pl-12 pr-4 bg-[#F5F5F5] border-2 border-transparent rounded-xl focus:outline-none focus:border-[#EF4444] transition-colors"
               />
-              
-              {/* Search Results */}
+
               {showResults && searchTerm && filteredProducts.length > 0 && (
                 <div className="absolute z-10 w-full mt-2 bg-white rounded-xl shadow-lg border border-gray-100 max-h-64 overflow-y-auto">
                   {filteredProducts.slice(0, 5).map((product) => (
@@ -192,7 +203,7 @@ export function Saida() {
                       onClick={() => handleProductSelect(product)}
                       className="w-full p-4 text-left hover:bg-[#F5F5F5] transition-colors border-b border-gray-100 last:border-0"
                     >
-                      <p className="font-medium text-[#2D2D2D]">{product.description}</p>
+                      <p className="font-medium text-[#2D2D2D]">{product.name}</p>
                       <p className="text-sm text-[#2D2D2D]/60">
                         {product.size} - {product.brand} - Estoque: {product.quantity}
                       </p>
@@ -210,20 +221,19 @@ export function Saida() {
               Escanear Código de Barras
             </button>
 
-            {/* Selected Product Preview */}
             {selectedProduct && (
               <div className="mt-6 p-4 bg-[#EF4444]/10 border border-[#EF4444] rounded-xl">
                 <div className="space-y-4">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <p className="font-['Barlow_Condensed'] font-bold text-lg text-[#2D2D2D]">
-                        {selectedProduct.description}
+                        {selectedProduct.name}
                       </p>
                       <p className="text-[#2D2D2D]/60">
                         {selectedProduct.size} - {selectedProduct.brand}
                       </p>
                       <p className="text-sm text-[#2D2D2D]/60 mt-2">
-                        Estoque: <strong>{selectedProduct.quantity}</strong> | Preço: <strong>R$ {selectedProduct.price?.toFixed(2)}</strong>
+                        Estoque: <strong>{selectedProduct.quantity}</strong> | Preço: <strong>R$ {selectedProduct.price_sale.toFixed(2)}</strong>
                       </p>
                     </div>
                     <button
@@ -263,14 +273,14 @@ export function Saida() {
                     <button
                       type="button"
                       onClick={handleAddToCart}
-                      disabled={quantity > selectedProduct.quantity}
+                      disabled={!!insufficientStock}
                       className="px-6 py-2 bg-[#EF4444] text-white rounded-lg font-medium hover:bg-[#EF4444]/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Adicionar ao Carrinho
                     </button>
                   </div>
 
-                  {quantity > selectedProduct.quantity && (
+                  {insufficientStock && (
                     <div className="flex items-start gap-2 p-3 bg-white/50 rounded-lg">
                       <AlertCircle className="w-5 h-5 text-[#EF4444] flex-shrink-0 mt-0.5" />
                       <div>
@@ -285,7 +295,6 @@ export function Saida() {
               </div>
             )}
 
-            {/* Cart Items */}
             {cartItems.length > 0 && (
               <div className="mt-6 space-y-2">
                 <h3 className="font-medium text-[#2D2D2D] mb-3">Produtos no Carrinho:</h3>
@@ -295,9 +304,9 @@ export function Saida() {
                     className="flex items-center justify-between p-3 bg-[#F5F5F5] rounded-lg"
                   >
                     <div className="flex-1">
-                      <p className="font-medium text-[#2D2D2D]">{item.product.description}</p>
+                      <p className="font-medium text-[#2D2D2D]">{item.product.name}</p>
                       <p className="text-sm text-[#2D2D2D]/60">
-                        {item.quantity} x R$ {item.product.price?.toFixed(2)} = R$ {((item.product.price || 0) * item.quantity).toFixed(2)}
+                        {item.quantity} x R$ {item.product.price_sale.toFixed(2)} = R$ {(item.product.price_sale * item.quantity).toFixed(2)}
                       </p>
                     </div>
                     <button
@@ -320,7 +329,7 @@ export function Saida() {
             </h2>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-              {mockServices.filter(s => s.active).map((service) => (
+              {services.filter((s) => s.active).map((service) => (
                 <button
                   key={service.id}
                   type="button"
@@ -336,7 +345,6 @@ export function Saida() {
               ))}
             </div>
 
-            {/* Cart Services */}
             {cartServices.length > 0 && (
               <div className="space-y-2">
                 <h3 className="font-medium text-[#2D2D2D] mb-3">Serviços Adicionados:</h3>
@@ -390,8 +398,6 @@ export function Saida() {
                 </h2>
 
                 <div className="space-y-4">
-
-                  {/* Client */}
                   <div>
                     <label className="block text-[#2D2D2D] font-medium mb-2">
                       Destino / Cliente
@@ -400,26 +406,29 @@ export function Saida() {
                       type="text"
                       value={client}
                       onChange={(e) => setClient(e.target.value)}
-                      placeholder="Nome do cliente ou destino"
+                      placeholder="Nome do cliente ou destino (opcional)"
                       className="w-full h-14 px-4 bg-[#F5F5F5] border-2 border-transparent rounded-xl focus:outline-none focus:border-[#EF4444] transition-colors"
-                      required
                     />
                   </div>
 
-                  {/* Date */}
                   <div>
                     <label className="block text-[#2D2D2D] font-medium mb-2">
-                      Data de Saída
+                      Forma de Pagamento *
                     </label>
-                    <input
-                      type="date"
-                      defaultValue={new Date().toISOString().split('T')[0]}
+                    <select
+                      value={paymentMethod}
+                      onChange={(e) => setPaymentMethod(e.target.value)}
                       className="w-full h-14 px-4 bg-[#F5F5F5] border-2 border-transparent rounded-xl focus:outline-none focus:border-[#EF4444] transition-colors"
                       required
-                    />
+                    >
+                      <option value="pix">PIX</option>
+                      <option value="dinheiro">Dinheiro</option>
+                      <option value="cartao_credito">Cartão de Crédito</option>
+                      <option value="cartao_debito">Cartão de Débito</option>
+                      <option value="fiado">Fiado</option>
+                    </select>
                   </div>
 
-                  {/* Notes */}
                   <div>
                     <label className="block text-[#2D2D2D] font-medium mb-2">
                       Observações (opcional)
@@ -434,7 +443,6 @@ export function Saida() {
                 </div>
               </div>
 
-              {/* Submit */}
               <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
                 <h2 className="text-xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D] mb-4">
                   4. Confirmar Saída
@@ -469,11 +477,20 @@ export function Saida() {
 
                 <button
                   type="submit"
-                  disabled={cartItems.length === 0 && cartServices.length === 0}
+                  disabled={createSale.isPending || (cartItems.length === 0 && cartServices.length === 0)}
                   className="w-full flex items-center justify-center gap-2 py-4 bg-[#EF4444] text-white rounded-xl font-medium text-lg hover:bg-[#EF4444]/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Check className="w-6 h-6" />
-                  Confirmar Saída
+                  {createSale.isPending ? (
+                    <>
+                      <Loader2 className="w-6 h-6 animate-spin" />
+                      Registrando...
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-6 h-6" />
+                      Confirmar Saída
+                    </>
+                  )}
                 </button>
               </div>
             </>

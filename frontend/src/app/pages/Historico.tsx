@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Download, Filter, TrendingDown, TrendingUp } from 'lucide-react';
-import { mockMovements } from '../data/mockData';
+import { Download, Filter, TrendingDown, TrendingUp, Loader2 } from 'lucide-react';
+import { useMovements } from '@/hooks/useMovements';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useAuth } from '../contexts/AuthContext';
@@ -10,24 +10,41 @@ export function Historico() {
   const { user } = useAuth();
   const [filterType, setFilterType] = useState('');
 
-  // Filtrar movimentos para operadores (apenas suas próprias movimentações)
+  const { data, isLoading, isError } = useMovements();
+  const allMovements = data?.data ?? [];
+
   const movements =
-    user?.role === 'OPERADOR'
-      ? mockMovements.filter((m) => m.operator === user.name)
-      : mockMovements;
+    user?.role === 'operador'
+      ? allMovements.filter((m) => m.user.name === user.name)
+      : allMovements;
 
   const filteredMovements = movements.filter((m) => {
     if (!filterType) return true;
     return m.type === filterType;
   });
 
-  const handleExport = (format: 'pdf' | 'excel') => {
-    toast.success(`Exportando relatório em ${format.toUpperCase()}...`);
+  const handleExport = (fmt: 'pdf' | 'excel') => {
+    toast.success(`Exportando relatório em ${fmt.toUpperCase()}...`);
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-full min-h-[400px]">
+        <Loader2 className="w-8 h-8 animate-spin text-[#F97316]" />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="p-8 text-center text-[#EF4444]">
+        Erro ao carregar movimentações. Tente novamente.
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D] mb-2">
@@ -37,7 +54,7 @@ export function Historico() {
             {filteredMovements.length} movimentação(ões) encontrada(s)
           </p>
         </div>
-        {user?.role === 'ADM' && (
+        {user?.role === 'adm' && (
           <div className="flex gap-2">
             <button
               onClick={() => handleExport('pdf')}
@@ -61,9 +78,7 @@ export function Historico() {
       <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
         <div className="flex items-center gap-2 mb-4">
           <Filter className="w-5 h-5 text-[#2D2D2D]/60" />
-          <h2 className="text-lg font-['Barlow_Condensed'] font-bold text-[#2D2D2D]">
-            Filtros
-          </h2>
+          <h2 className="text-lg font-['Barlow_Condensed'] font-bold text-[#2D2D2D]">Filtros</h2>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
@@ -74,8 +89,8 @@ export function Historico() {
               className="w-full h-12 px-4 bg-[#F5F5F5] border-2 border-transparent rounded-xl focus:outline-none focus:border-[#F97316] transition-colors"
             >
               <option value="">Todas</option>
-              <option value="ENTRADA">Entradas</option>
-              <option value="SAIDA">Saídas</option>
+              <option value="entrada">Entradas</option>
+              <option value="saida">Saídas</option>
             </select>
           </div>
           <div>
@@ -119,42 +134,42 @@ export function Historico() {
                   } hover:bg-[#F5F5F5] transition-colors`}
                 >
                   <td className="px-6 py-4 text-[#2D2D2D]/60">
-                    {format(new Date(movement.date), "dd/MM/yyyy 'às' HH:mm", {
+                    {format(new Date(movement.created_at), "dd/MM/yyyy 'às' HH:mm", {
                       locale: ptBR,
                     })}
                   </td>
                   <td className="px-6 py-4 font-medium text-[#2D2D2D]">
-                    {movement.productName}
+                    {movement.product.name}
                   </td>
                   <td className="px-6 py-4 text-center">
                     <span
                       className={`inline-flex items-center gap-1 px-3 py-1 rounded-lg font-medium ${
-                        movement.type === 'ENTRADA'
+                        movement.type === 'entrada'
                           ? 'bg-[#22C55E]/10 text-[#22C55E]'
                           : 'bg-[#F97316]/10 text-[#F97316]'
                       }`}
                     >
-                      {movement.type === 'ENTRADA' ? (
+                      {movement.type === 'entrada' ? (
                         <TrendingDown className="w-4 h-4" />
                       ) : (
                         <TrendingUp className="w-4 h-4" />
                       )}
-                      {movement.type}
+                      {movement.type.toUpperCase()}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-center">
                     <span
                       className={`text-lg font-['Barlow_Condensed'] font-bold ${
-                        movement.type === 'ENTRADA' ? 'text-[#22C55E]' : 'text-[#F97316]'
+                        movement.type === 'entrada' ? 'text-[#22C55E]' : 'text-[#F97316]'
                       }`}
                     >
-                      {movement.type === 'ENTRADA' ? '+' : '-'}
+                      {movement.type === 'entrada' ? '+' : '-'}
                       {movement.quantity}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-[#2D2D2D]">{movement.operator}</td>
+                  <td className="px-6 py-4 text-[#2D2D2D]">{movement.user.name}</td>
                   <td className="px-6 py-4 text-[#2D2D2D]/60 text-sm">
-                    {movement.notes || movement.supplier || movement.client || '-'}
+                    {movement.notes || '-'}
                   </td>
                 </tr>
               ))}
@@ -169,26 +184,26 @@ export function Historico() {
           <div key={movement.id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
             <div className="flex items-start justify-between mb-3">
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-[#2D2D2D] mb-1">{movement.productName}</p>
+                <p className="font-medium text-[#2D2D2D] mb-1">{movement.product.name}</p>
                 <p className="text-xs text-[#2D2D2D]/60">
-                  {format(new Date(movement.date), "dd/MM/yyyy 'às' HH:mm", {
+                  {format(new Date(movement.created_at), "dd/MM/yyyy 'às' HH:mm", {
                     locale: ptBR,
                   })}
                 </p>
               </div>
               <span
                 className={`inline-flex items-center gap-1 px-3 py-1 rounded-lg font-medium text-sm ${
-                  movement.type === 'ENTRADA'
+                  movement.type === 'entrada'
                     ? 'bg-[#22C55E]/10 text-[#22C55E]'
                     : 'bg-[#F97316]/10 text-[#F97316]'
                 }`}
               >
-                {movement.type === 'ENTRADA' ? (
+                {movement.type === 'entrada' ? (
                   <TrendingDown className="w-4 h-4" />
                 ) : (
                   <TrendingUp className="w-4 h-4" />
                 )}
-                {movement.type}
+                {movement.type.toUpperCase()}
               </span>
             </div>
 
@@ -197,29 +212,26 @@ export function Historico() {
                 <p className="text-xs text-[#2D2D2D]/60 mb-1">Quantidade</p>
                 <p
                   className={`text-xl font-['Barlow_Condensed'] font-bold ${
-                    movement.type === 'ENTRADA' ? 'text-[#22C55E]' : 'text-[#F97316]'
+                    movement.type === 'entrada' ? 'text-[#22C55E]' : 'text-[#F97316]'
                   }`}
                 >
-                  {movement.type === 'ENTRADA' ? '+' : '-'}
+                  {movement.type === 'entrada' ? '+' : '-'}
                   {movement.quantity}
                 </p>
               </div>
               <div>
                 <p className="text-xs text-[#2D2D2D]/60 mb-1">Responsável</p>
-                <p className="text-sm font-medium text-[#2D2D2D]">{movement.operator}</p>
+                <p className="text-sm font-medium text-[#2D2D2D]">{movement.user.name}</p>
               </div>
             </div>
 
-            {(movement.notes || movement.supplier || movement.client) && (
-              <p className="text-sm text-[#2D2D2D]/60">
-                {movement.notes || movement.supplier || movement.client}
-              </p>
+            {movement.notes && (
+              <p className="text-sm text-[#2D2D2D]/60">{movement.notes}</p>
             )}
           </div>
         ))}
       </div>
 
-      {/* Empty State */}
       {filteredMovements.length === 0 && (
         <div className="bg-white rounded-2xl p-12 shadow-sm border border-gray-100 text-center">
           <div className="w-20 h-20 bg-[#F5F5F5] rounded-full flex items-center justify-center mx-auto mb-4">

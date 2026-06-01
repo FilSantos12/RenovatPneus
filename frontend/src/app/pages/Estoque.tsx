@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Search, Eye, Edit, Printer, Plus, AlertTriangle, Check } from 'lucide-react';
-import { mockProducts } from '../data/mockData';
-import { Product } from '../types';
+import { Search, Eye, Edit, Printer, Plus, AlertTriangle, Check, Loader2 } from 'lucide-react';
+import { useProducts } from '@/hooks/useProducts';
+import type { Product } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 
 export function Estoque() {
@@ -10,23 +10,24 @@ export function Estoque() {
   const [filterBrand, setFilterBrand] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
 
-  // Get unique brands
-  const brands = Array.from(new Set(mockProducts.map((p) => p.brand))).sort();
+  const { data, isLoading, isError } = useProducts();
+  const products: Product[] = data?.data ?? [];
 
-  // Filter products
-  const filteredProducts = mockProducts.filter((product) => {
+  const brands = Array.from(new Set(products.map((p) => p.brand))).sort();
+
+  const filteredProducts = products.filter((product) => {
     const matchesSearch =
-      product.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.code.includes(searchTerm) ||
+      product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (product.barcode ?? '').includes(searchTerm) ||
       product.size.toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesBrand = !filterBrand || product.brand === filterBrand;
 
     let matchesStatus = true;
     if (filterStatus === 'OK') {
-      matchesStatus = product.quantity >= product.minQuantity;
+      matchesStatus = product.quantity >= product.min_stock;
     } else if (filterStatus === 'BAIXO') {
-      matchesStatus = product.quantity > 0 && product.quantity < product.minQuantity;
+      matchesStatus = product.quantity > 0 && product.low_stock;
     } else if (filterStatus === 'ZERADO') {
       matchesStatus = product.quantity === 0;
     }
@@ -43,7 +44,7 @@ export function Estoque() {
         </span>
       );
     }
-    if (product.quantity < product.minQuantity) {
+    if (product.low_stock) {
       return (
         <span className="inline-flex items-center gap-1 px-3 py-1 bg-[#FBBF24] text-[#2D2D2D] text-sm font-medium rounded-lg">
           <AlertTriangle className="w-4 h-4" />
@@ -59,6 +60,22 @@ export function Estoque() {
     );
   };
 
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-full min-h-[400px]">
+        <Loader2 className="w-8 h-8 animate-spin text-[#F97316]" />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="p-8 text-center text-[#EF4444]">
+        Erro ao carregar produtos. Tente novamente.
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-6">
       {/* Header */}
@@ -69,7 +86,7 @@ export function Estoque() {
           </h1>
           <p className="text-[#2D2D2D]/60">{filteredProducts.length} produtos encontrados</p>
         </div>
-        {user?.role === 'ADM' && (
+        {user?.role === 'adm' && (
           <button className="flex items-center gap-2 px-6 py-3 bg-[#F97316] text-white rounded-xl font-medium hover:bg-[#F97316]/90 transition-colors">
             <Plus className="w-5 h-5" />
             Cadastrar Novo Pneu
@@ -80,7 +97,6 @@ export function Estoque() {
       {/* Filters */}
       <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Search */}
           <div className="relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#2D2D2D]/40" />
             <input
@@ -92,35 +108,27 @@ export function Estoque() {
             />
           </div>
 
-          {/* Brand Filter */}
-          <div>
-            <select
-              value={filterBrand}
-              onChange={(e) => setFilterBrand(e.target.value)}
-              className="w-full h-12 px-4 bg-[#F5F5F5] border-2 border-transparent rounded-xl focus:outline-none focus:border-[#F97316] transition-colors"
-            >
-              <option value="">Todas as marcas</option>
-              {brands.map((brand) => (
-                <option key={brand} value={brand}>
-                  {brand}
-                </option>
-              ))}
-            </select>
-          </div>
+          <select
+            value={filterBrand}
+            onChange={(e) => setFilterBrand(e.target.value)}
+            className="w-full h-12 px-4 bg-[#F5F5F5] border-2 border-transparent rounded-xl focus:outline-none focus:border-[#F97316] transition-colors"
+          >
+            <option value="">Todas as marcas</option>
+            {brands.map((brand) => (
+              <option key={brand} value={brand}>{brand}</option>
+            ))}
+          </select>
 
-          {/* Status Filter */}
-          <div>
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="w-full h-12 px-4 bg-[#F5F5F5] border-2 border-transparent rounded-xl focus:outline-none focus:border-[#F97316] transition-colors"
-            >
-              <option value="">Todos os status</option>
-              <option value="OK">OK</option>
-              <option value="BAIXO">Estoque Baixo</option>
-              <option value="ZERADO">Zerado</option>
-            </select>
-          </div>
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className="w-full h-12 px-4 bg-[#F5F5F5] border-2 border-transparent rounded-xl focus:outline-none focus:border-[#F97316] transition-colors"
+          >
+            <option value="">Todos os status</option>
+            <option value="OK">OK</option>
+            <option value="BAIXO">Estoque Baixo</option>
+            <option value="ZERADO">Zerado</option>
+          </select>
         </div>
       </div>
 
@@ -131,7 +139,7 @@ export function Estoque() {
             <thead>
               <tr className="bg-[#111111] text-white">
                 <th className="px-6 py-4 text-left font-medium">Código</th>
-                <th className="px-6 py-4 text-left font-medium">Descrição</th>
+                <th className="px-6 py-4 text-left font-medium">Nome</th>
                 <th className="px-6 py-4 text-left font-medium">Medida</th>
                 <th className="px-6 py-4 text-left font-medium">Marca</th>
                 <th className="px-6 py-4 text-center font-medium">Qtd.</th>
@@ -148,8 +156,8 @@ export function Estoque() {
                     index % 2 === 0 ? 'bg-white' : 'bg-[#F9F9F9]'
                   } hover:bg-[#F5F5F5] transition-colors`}
                 >
-                  <td className="px-6 py-4 text-[#2D2D2D]/60">{product.code}</td>
-                  <td className="px-6 py-4 font-medium text-[#2D2D2D]">{product.description}</td>
+                  <td className="px-6 py-4 text-[#2D2D2D]/60">{product.barcode ?? '-'}</td>
+                  <td className="px-6 py-4 font-medium text-[#2D2D2D]">{product.name}</td>
                   <td className="px-6 py-4 text-[#2D2D2D]">{product.size}</td>
                   <td className="px-6 py-4 text-[#2D2D2D]">{product.brand}</td>
                   <td className="px-6 py-4 text-center">
@@ -157,14 +165,14 @@ export function Estoque() {
                       {product.quantity}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-center text-[#2D2D2D]/60">{product.minQuantity}</td>
+                  <td className="px-6 py-4 text-center text-[#2D2D2D]/60">{product.min_stock}</td>
                   <td className="px-6 py-4 text-center">{getStatusBadge(product)}</td>
                   <td className="px-6 py-4">
                     <div className="flex items-center justify-center gap-2">
                       <button className="p-2 text-[#2D2D2D]/60 hover:text-[#F97316] hover:bg-[#F97316]/10 rounded-lg transition-colors">
                         <Eye className="w-5 h-5" />
                       </button>
-                      {user?.role === 'ADM' && (
+                      {user?.role === 'adm' && (
                         <button className="p-2 text-[#2D2D2D]/60 hover:text-[#F97316] hover:bg-[#F97316]/10 rounded-lg transition-colors">
                           <Edit className="w-5 h-5" />
                         </button>
@@ -188,7 +196,7 @@ export function Estoque() {
             <div className="flex items-start justify-between mb-3">
               <div className="flex-1 min-w-0">
                 <h3 className="font-['Barlow_Condensed'] font-bold text-lg text-[#2D2D2D] mb-1">
-                  {product.description}
+                  {product.name}
                 </h3>
                 <p className="text-sm text-[#2D2D2D]/60">{product.size}</p>
                 <p className="text-sm text-[#2D2D2D] font-medium mt-1">{product.brand}</p>
@@ -206,12 +214,12 @@ export function Estoque() {
               <div>
                 <p className="text-xs text-[#2D2D2D]/60 mb-1">Mínimo</p>
                 <p className="text-xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D]/60">
-                  {product.minQuantity}
+                  {product.min_stock}
                 </p>
               </div>
               <div>
                 <p className="text-xs text-[#2D2D2D]/60 mb-1">Código</p>
-                <p className="text-sm text-[#2D2D2D]/60 truncate">{product.code}</p>
+                <p className="text-sm text-[#2D2D2D]/60 truncate">{product.barcode ?? '-'}</p>
               </div>
             </div>
 
@@ -220,7 +228,7 @@ export function Estoque() {
                 <Eye className="w-4 h-4" />
                 Ver
               </button>
-              {user?.role === 'ADM' && (
+              {user?.role === 'adm' && (
                 <button className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-[#F5F5F5] text-[#2D2D2D] rounded-xl font-medium hover:bg-[#F97316]/10 hover:text-[#F97316] transition-colors">
                   <Edit className="w-4 h-4" />
                   Editar
@@ -235,7 +243,6 @@ export function Estoque() {
         ))}
       </div>
 
-      {/* Empty State */}
       {filteredProducts.length === 0 && (
         <div className="bg-white rounded-2xl p-12 shadow-sm border border-gray-100 text-center">
           <div className="w-20 h-20 bg-[#F5F5F5] rounded-full flex items-center justify-center mx-auto mb-4">
@@ -244,9 +251,7 @@ export function Estoque() {
           <h3 className="text-xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D] mb-2">
             Nenhum produto encontrado
           </h3>
-          <p className="text-[#2D2D2D]/60">
-            Tente ajustar os filtros de busca
-          </p>
+          <p className="text-[#2D2D2D]/60">Tente ajustar os filtros de busca</p>
         </div>
       )}
     </div>

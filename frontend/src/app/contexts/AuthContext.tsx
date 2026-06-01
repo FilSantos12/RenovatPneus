@@ -1,87 +1,53 @@
-import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
-import { User } from '../types';
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { authService } from '@/services/auth.service'
+import type { User } from '../types'
 
 interface AuthContextType {
-  user: User | null;
-  login: (username: string, password: string) => Promise<boolean>;
-  logout: () => void;
-  isAuthenticated: boolean;
+  user: User | null
+  isLoading: boolean
+  isAuthenticated: boolean
+  login: (username: string, password: string) => Promise<void>
+  logout: () => Promise<void>
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-// Mock de usuários para demonstração
-const mockUsers: (User & { password: string })[] = [
-  {
-    id: '1',
-    name: 'Administrador',
-    username: 'admin',
-    password: 'admin123',
-    role: 'ADM',
-    active: true,
-  },
-  {
-    id: '2',
-    name: 'João Silva',
-    username: 'joao',
-    password: 'joao123',
-    role: 'OPERADOR',
-    active: true,
-  },
-];
+const AuthContext = createContext<AuthContextType | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    // Restaurar sessão do localStorage
-    const storedUser = localStorage.getItem('renovat_user');
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
-  }, []);
+    authService.me()
+      .then(setUser)
+      .catch(() => setUser(null))
+      .finally(() => setIsLoading(false))
+  }, [])
 
-  const login = async (username: string, password: string): Promise<boolean> => {
-    // Simular delay de requisição
-    await new Promise((resolve) => setTimeout(resolve, 500));
+  async function login(username: string, password: string) {
+    const loggedUser = await authService.login(username, password)
+    setUser(loggedUser)
+  }
 
-    const foundUser = mockUsers.find(
-      (u) => u.username === username && u.password === password && u.active
-    );
-
-    if (foundUser) {
-      const { password: _, ...userWithoutPassword } = foundUser;
-      setUser(userWithoutPassword);
-      localStorage.setItem('renovat_user', JSON.stringify(userWithoutPassword));
-      return true;
-    }
-
-    return false;
-  };
-
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('renovat_user');
-  };
+  async function logout() {
+    await authService.logout()
+    setUser(null)
+  }
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        login,
-        logout,
-        isAuthenticated: !!user,
-      }}
-    >
+    <AuthContext.Provider value={{
+      user,
+      isLoading,
+      isAuthenticated: !!user,
+      login,
+      logout,
+    }}>
       {children}
     </AuthContext.Provider>
-  );
+  )
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
+  const ctx = useContext(AuthContext)
+  if (!ctx) throw new Error('useAuth deve ser usado dentro de AuthProvider')
+  return ctx
 }

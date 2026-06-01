@@ -41,24 +41,24 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
   }, []);
 
   const menuItems = [
-    { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', roles: ['ADM', 'OPERADOR'] },
-    { path: '/scanner', icon: Scan, label: 'Escanear', roles: ['ADM', 'OPERADOR'] },
-    { path: '/estoque', icon: Package, label: 'Estoque', roles: ['ADM', 'OPERADOR'] },
-    { path: '/entrada', icon: ArrowDownToLine, label: 'Entrada', roles: ['ADM', 'OPERADOR'] },
-    { path: '/saida', icon: ArrowUpFromLine, label: 'Saída', roles: ['ADM', 'OPERADOR'] },
-    { path: '/servicos', icon: Wrench, label: 'Serviços', roles: ['ADM', 'OPERADOR'] },
-    { path: '/etiquetas', icon: Tag, label: 'Etiquetas', roles: ['ADM', 'OPERADOR'] },
-    { path: '/historico', icon: History, label: 'Histórico', roles: ['ADM', 'OPERADOR'] },
-    { path: '/financas', icon: DollarSign, label: 'Finanças', roles: ['ADM'] },
-    { path: '/usuarios', icon: Users, label: 'Usuários', roles: ['ADM'] },
+    { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', roles: ['adm', 'operador'] },
+    { path: '/scanner', icon: Scan, label: 'Escanear', roles: ['adm', 'operador'] },
+    { path: '/estoque', icon: Package, label: 'Estoque', roles: ['adm', 'operador'] },
+    { path: '/entrada', icon: ArrowDownToLine, label: 'Entrada', roles: ['adm', 'operador'] },
+    { path: '/saida', icon: ArrowUpFromLine, label: 'Saída', roles: ['adm', 'operador'] },
+    { path: '/servicos', icon: Wrench, label: 'Serviços', roles: ['adm', 'operador'] },
+    { path: '/etiquetas', icon: Tag, label: 'Etiquetas', roles: ['adm', 'operador'] },
+    { path: '/historico', icon: History, label: 'Histórico', roles: ['adm', 'operador'] },
+    { path: '/financas', icon: DollarSign, label: 'Finanças', roles: ['adm'] },
+    { path: '/usuarios', icon: Users, label: 'Usuários', roles: ['adm'] },
   ];
 
   const filteredMenuItems = menuItems.filter((item) =>
     item.roles.includes(user?.role || '')
   );
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     setShowLogoutModal(false);
   };
 
@@ -105,7 +105,7 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
                 <p className="text-sm font-medium truncate">{user?.name}</p>
                 <span
                   className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${
-                    user?.role === 'ADM'
+                    user?.role === 'adm'
                       ? 'bg-[#111111] border border-white text-white'
                       : 'bg-[#F97316] text-white'
                   }`}

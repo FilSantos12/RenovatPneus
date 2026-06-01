@@ -1,15 +1,18 @@
 import { useState, useRef } from 'react';
-import { Camera, Plus, Minus, Check, Keyboard, AlertCircle } from 'lucide-react';
-import { mockProducts } from '../data/mockData';
-import { Product } from '../types';
+import { Camera, Plus, Minus, Check, Keyboard, AlertCircle, Loader2 } from 'lucide-react';
+import { useProducts } from '@/hooks/useProducts';
+import { useCreateMovement } from '@/hooks/useMovements';
+import type { Product } from '../types';
 import { toast } from 'sonner';
 import { motion } from 'motion/react';
+
+type MovementType = 'entrada' | 'saida'
 
 export function Scanner() {
   const [scanning, setScanning] = useState(false);
   const [scannedProduct, setScannedProduct] = useState<Product | null>(null);
   const [showMovementType, setShowMovementType] = useState(false);
-  const [movementType, setMovementType] = useState<'ENTRADA' | 'SAIDA' | null>(null);
+  const [movementType, setMovementType] = useState<MovementType | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [notes, setNotes] = useState('');
   const [manualCode, setManualCode] = useState('');
@@ -17,34 +20,37 @@ export function Scanner() {
 
   const videoRef = useRef<HTMLVideoElement>(null);
 
+  const { data: productsData } = useProducts();
+  const products: Product[] = productsData?.data ?? [];
+  const createMovement = useCreateMovement();
+
   const startScanning = async () => {
     try {
       setScanning(true);
-      // Simular escaneamento após 2 segundos
       setTimeout(() => {
-        // Pegar um produto aleatório como exemplo
-        const randomProduct = mockProducts[Math.floor(Math.random() * mockProducts.length)];
-        handleProductScanned(randomProduct.code);
+        const randomProduct = products[Math.floor(Math.random() * products.length)];
+        if (randomProduct?.barcode) {
+          handleProductScanned(randomProduct.barcode);
+        } else {
+          toast.error('Nenhum produto com código de barras encontrado');
+          setScanning(false);
+        }
       }, 2000);
-    } catch (error) {
+    } catch {
       toast.error('Não foi possível acessar a câmera');
       setScanning(false);
     }
   };
 
   const handleProductScanned = (code: string) => {
-    const product = mockProducts.find((p) => p.code === code);
-    
+    const product = products.find((p) => p.barcode === code);
+
     if (product) {
       setScannedProduct(product);
       setShowMovementType(true);
       setScanning(false);
       toast.success('Produto encontrado!');
-      
-      // Vibrar o celular (se disponível)
-      if ('vibrate' in navigator) {
-        navigator.vibrate(200);
-      }
+      if ('vibrate' in navigator) navigator.vibrate(200);
     } else {
       toast.error('Produto não encontrado');
       setScanning(false);
@@ -61,25 +67,22 @@ export function Scanner() {
     setManualCode('');
   };
 
-  const handleMovementTypeSelect = (type: 'ENTRADA' | 'SAIDA') => {
+  const handleMovementTypeSelect = (type: MovementType) => {
     setMovementType(type);
     setShowMovementType(false);
   };
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (!scannedProduct || !movementType) return;
 
-    toast.success(
-      `${movementType === 'ENTRADA' ? 'Entrada' : 'Saída'} de ${quantity} ${
-        scannedProduct.description
-      } registrada com sucesso!`
-    );
+    await createMovement.mutateAsync({
+      product_id: scannedProduct.id,
+      type: movementType,
+      quantity,
+      notes: notes || undefined,
+    });
 
-    // Reset
-    setScannedProduct(null);
-    setMovementType(null);
-    setQuantity(1);
-    setNotes('');
+    handleReset();
   };
 
   const handleReset = () => {
@@ -93,7 +96,6 @@ export function Scanner() {
 
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-6">
-      {/* Header */}
       <div>
         <h1 className="text-3xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D] mb-2">
           Leitor de Código de Barras
@@ -103,7 +105,6 @@ export function Scanner() {
         </p>
       </div>
 
-      {/* Scanner View */}
       {!scannedProduct && !scanning && (
         <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
           <div className="max-w-2xl mx-auto text-center">
@@ -136,7 +137,6 @@ export function Scanner() {
         </div>
       )}
 
-      {/* Scanning Animation */}
       {scanning && (
         <motion.div
           initial={{ opacity: 0 }}
@@ -144,29 +144,18 @@ export function Scanner() {
           className="bg-[#111111] rounded-2xl p-8 shadow-sm aspect-video max-w-2xl mx-auto relative overflow-hidden"
         >
           <video ref={videoRef} className="w-full h-full object-cover rounded-lg" />
-          
-          {/* Scanning Line */}
           <motion.div
             className="absolute left-1/2 w-3/4 h-1 bg-[#F97316] shadow-lg shadow-[#F97316]/50"
             style={{ transform: 'translateX(-50%)' }}
-            animate={{
-              top: ['10%', '90%'],
-            }}
-            transition={{
-              duration: 2,
-              repeat: Infinity,
-              ease: 'linear',
-            }}
+            animate={{ top: ['10%', '90%'] }}
+            transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
           />
-          
-          {/* Frame Corners */}
           <div className="absolute inset-8 border-4 border-[#F97316] rounded-lg pointer-events-none">
             <div className="absolute top-0 left-0 w-12 h-12 border-t-4 border-l-4 border-[#F97316]" />
             <div className="absolute top-0 right-0 w-12 h-12 border-t-4 border-r-4 border-[#F97316]" />
             <div className="absolute bottom-0 left-0 w-12 h-12 border-b-4 border-l-4 border-[#F97316]" />
             <div className="absolute bottom-0 right-0 w-12 h-12 border-b-4 border-r-4 border-[#F97316]" />
           </div>
-
           <div className="absolute bottom-8 left-1/2 -translate-x-1/2 text-white text-center">
             <p className="text-lg font-medium">Escaneando...</p>
             <p className="text-sm text-white/60 mt-1">Posicione o código de barras na área destacada</p>
@@ -174,7 +163,6 @@ export function Scanner() {
         </motion.div>
       )}
 
-      {/* Movement Type Selection */}
       {showMovementType && scannedProduct && (
         <motion.div
           initial={{ y: 100, opacity: 0 }}
@@ -187,7 +175,7 @@ export function Scanner() {
             </h3>
             <div className="p-4 bg-[#F5F5F5] rounded-xl">
               <p className="font-['Barlow_Condensed'] font-bold text-lg text-[#2D2D2D]">
-                {scannedProduct.description}
+                {scannedProduct.name}
               </p>
               <p className="text-[#2D2D2D]/60">{scannedProduct.size} - {scannedProduct.brand}</p>
               <div className="flex items-center gap-4 mt-2">
@@ -201,27 +189,23 @@ export function Scanner() {
 
           <div className="grid grid-cols-2 gap-4">
             <button
-              onClick={() => handleMovementTypeSelect('ENTRADA')}
+              onClick={() => handleMovementTypeSelect('entrada')}
               className="flex flex-col items-center gap-3 p-6 rounded-xl border-2 border-[#22C55E] text-[#22C55E] hover:bg-[#22C55E] hover:text-white transition-all group"
             >
               <div className="w-16 h-16 bg-[#22C55E]/10 group-hover:bg-white/20 rounded-xl flex items-center justify-center transition-colors">
                 <Plus className="w-8 h-8" />
               </div>
-              <span className="font-['Barlow_Condensed'] font-bold text-lg">
-                Registrar ENTRADA
-              </span>
+              <span className="font-['Barlow_Condensed'] font-bold text-lg">Registrar ENTRADA</span>
             </button>
 
             <button
-              onClick={() => handleMovementTypeSelect('SAIDA')}
+              onClick={() => handleMovementTypeSelect('saida')}
               className="flex flex-col items-center gap-3 p-6 rounded-xl border-2 border-[#EF4444] text-[#EF4444] hover:bg-[#EF4444] hover:text-white transition-all group"
             >
               <div className="w-16 h-16 bg-[#EF4444]/10 group-hover:bg-white/20 rounded-xl flex items-center justify-center transition-colors">
                 <Minus className="w-8 h-8" />
               </div>
-              <span className="font-['Barlow_Condensed'] font-bold text-lg">
-                Registrar SAÍDA
-              </span>
+              <span className="font-['Barlow_Condensed'] font-bold text-lg">Registrar SAÍDA</span>
             </button>
           </div>
 
@@ -234,7 +218,6 @@ export function Scanner() {
         </motion.div>
       )}
 
-      {/* Movement Form */}
       {movementType && scannedProduct && (
         <motion.div
           initial={{ y: 100, opacity: 0 }}
@@ -243,17 +226,14 @@ export function Scanner() {
         >
           <div className="mb-6">
             <h3 className="text-xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D] mb-2">
-              Confirmar {movementType === 'ENTRADA' ? 'Entrada' : 'Saída'}
+              Confirmar {movementType === 'entrada' ? 'Entrada' : 'Saída'}
             </h3>
-            <p className="text-[#2D2D2D]/60">{scannedProduct.description}</p>
+            <p className="text-[#2D2D2D]/60">{scannedProduct.name}</p>
           </div>
 
           <div className="space-y-6">
-            {/* Quantity */}
             <div>
-              <label className="block text-[#2D2D2D] font-medium mb-3">
-                Quantidade
-              </label>
+              <label className="block text-[#2D2D2D] font-medium mb-3">Quantidade</label>
               <div className="flex items-center justify-center gap-4">
                 <button
                   onClick={() => setQuantity(Math.max(1, quantity - 1))}
@@ -275,8 +255,8 @@ export function Scanner() {
                   <Plus className="w-6 h-6" />
                 </button>
               </div>
-              
-              {movementType === 'SAIDA' && quantity > scannedProduct.quantity && (
+
+              {movementType === 'saida' && quantity > scannedProduct.quantity && (
                 <div className="mt-3 p-3 bg-[#EF4444]/10 border border-[#EF4444] rounded-xl flex items-start gap-2">
                   <AlertCircle className="w-5 h-5 text-[#EF4444] flex-shrink-0 mt-0.5" />
                   <div>
@@ -289,7 +269,6 @@ export function Scanner() {
               )}
             </div>
 
-            {/* Notes */}
             <div>
               <label className="block text-[#2D2D2D] font-medium mb-2">
                 Observações (opcional)
@@ -302,7 +281,6 @@ export function Scanner() {
               />
             </div>
 
-            {/* Actions */}
             <div className="flex gap-3">
               <button
                 onClick={handleReset}
@@ -312,22 +290,25 @@ export function Scanner() {
               </button>
               <button
                 onClick={handleConfirm}
-                disabled={movementType === 'SAIDA' && quantity > scannedProduct.quantity}
+                disabled={createMovement.isPending || (movementType === 'saida' && quantity > scannedProduct.quantity)}
                 className={`flex-1 flex items-center justify-center gap-2 py-4 rounded-xl font-medium transition-colors ${
-                  movementType === 'ENTRADA'
+                  movementType === 'entrada'
                     ? 'bg-[#22C55E] text-white hover:bg-[#22C55E]/90'
                     : 'bg-[#EF4444] text-white hover:bg-[#EF4444]/90'
                 } disabled:opacity-50 disabled:cursor-not-allowed`}
               >
-                <Check className="w-5 h-5" />
-                Confirmar {movementType === 'ENTRADA' ? 'Entrada' : 'Saída'}
+                {createMovement.isPending ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Check className="w-5 h-5" />
+                )}
+                Confirmar {movementType === 'entrada' ? 'Entrada' : 'Saída'}
               </button>
             </div>
           </div>
         </motion.div>
       )}
 
-      {/* Manual Input Modal */}
       {showManualInput && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <motion.div
@@ -342,16 +323,14 @@ export function Scanner() {
               type="text"
               value={manualCode}
               onChange={(e) => setManualCode(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleManualSearch()}
               placeholder="Digite o código de barras"
               className="w-full h-14 px-4 bg-[#F5F5F5] border-2 border-transparent rounded-xl focus:outline-none focus:border-[#F97316] transition-colors mb-4"
               autoFocus
             />
             <div className="flex gap-3">
               <button
-                onClick={() => {
-                  setShowManualInput(false);
-                  setManualCode('');
-                }}
+                onClick={() => { setShowManualInput(false); setManualCode(''); }}
                 className="flex-1 py-3 bg-[#F5F5F5] text-[#2D2D2D] rounded-xl font-medium hover:bg-gray-200 transition-colors"
               >
                 Cancelar
