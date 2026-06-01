@@ -115,7 +115,7 @@ frontend/
         │   └── ui/                     # shadcn/ui — não editar diretamente
         └── pages/
             ├── Login.tsx           # navega via useEffect após isAuthenticated=true
-            ├── Dashboard.tsx       # usa useDashboard() + useMovements()
+            ├── Dashboard.tsx       # 5 cards clicáveis, gráfico c/ Serviços, atividades unificadas (movements + sales)
             ├── Estoque.tsx         # CRUD completo: visualizar, cadastro, edição, exclusão (ADM), etiqueta
             ├── Entrada.tsx         # usa useCreateMovement(), BarcodeScanner integrado
             ├── Saida.tsx           # usa useCreateSale(), BarcodeScanner integrado
@@ -192,7 +192,7 @@ backend/
 │       ├── MovementService.php  # lockForUpdate() + DB::transaction
 │       ├── SaleService.php      # reutiliza MovementService para baixa de estoque
 │       ├── UserService.php
-│       └── DashboardService.php
+│       └── DashboardService.php  # services_today via SaleService; sales_today usa whereHas('items') — exclui vendas só de serviço
 ├── database/
 │   ├── migrations/              # 12 migrations (+ barcode_sequences)
 │   └── seeders/
@@ -289,6 +289,8 @@ Request → Route → Middleware (auth:sanctum, role)
 - **Movimentação imutável:** `MovementPolicy` retorna `false` para update/delete
 - **Usuário desativado:** `AuthService` verifica `active = true` no login
 - **Barcode interno:** `BarcodeSequence::generateNext()` usa `lockForUpdate()` — sem duplicatas; `peekNext()` só lê (preview sem reservar)
+- **Dashboard `sales_today`:** usa `whereHas('items')` — conta apenas vendas com produtos; venda exclusiva de serviço não entra neste contador
+- **Dashboard `services_today`:** soma `SaleService::whereDate('created_at')->sum('quantity')` — conta todos os serviços executados independente da venda ter produtos
 
 ---
 
@@ -482,4 +484,5 @@ NSSM 2.24 (x64) em `installer/tools/nssm.exe`.
 | CRUD completo da página Estoque (visualizar, cadastro, edição, exclusão ADM) | ✅ Concluído |
 | Geração automática de barcode interno (RNV-XXXXXX, sequencial atômico) | ✅ Concluído |
 | Sidebar reordenada + "Saída" renomeada para "Venda" | ✅ Concluído |
+| Dashboard: 5 cards clicáveis, serviços no gráfico e lista unificada | ✅ Concluído |
 | Fase 5 — Testes + build de produção + instalador .exe | ⏳ Pendente |
