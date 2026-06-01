@@ -101,6 +101,7 @@ export interface DashboardSummary {
   entries_today: number
   exits_today: number
   sales_today: number
+  services_today: number
   revenue_today: number
   low_stock_products: Product[]
 }

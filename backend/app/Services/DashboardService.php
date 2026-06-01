@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Movement;
 use App\Models\Product;
 use App\Models\Sale;
+use App\Models\SaleService;
 
 class DashboardService
 {
@@ -25,6 +26,7 @@ class DashboardService
             'entries_today' => Movement::whereDate('created_at', $today)->where('type', 'entrada')->count(),
             'exits_today' => Movement::whereDate('created_at', $today)->where('type', 'saida')->count(),
             'sales_today' => Sale::whereDate('created_at', $today)->count(),
+            'services_today' => SaleService::whereDate('created_at', $today)->sum('quantity'),
             'revenue_today' => Sale::whereDate('created_at', $today)->where('status', 'pago')->sum('total'),
             'low_stock_products' => $lowStockProducts,
         ];

@@ -1,20 +1,24 @@
-import { Package, TrendingDown, TrendingUp, AlertTriangle, Plus, Minus, Scan, Printer, Eye, Loader2 } from 'lucide-react';
+import { Package, TrendingDown, TrendingUp, AlertTriangle, Plus, Minus, Scan, Printer, Eye, Loader2, Wrench } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { useDashboard } from '@/hooks/useDashboard';
 import { useMovements } from '@/hooks/useMovements';
+import { useSales } from '@/hooks/useSales';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { format, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 export function Dashboard() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { data: summary, isLoading: loadingSummary } = useDashboard();
   const { data: movementsData, isLoading: loadingMovements } = useMovements({ page: 1 });
+  const { data: salesData, isLoading: loadingSales } = useSales({ page: 1 });
 
   const movements = movementsData?.data ?? [];
+  const sales = salesData?.data ?? [];
 
-  // Chart data for last 7 days
+  // Chart data — last 7 days
   const today = new Date();
   const chartData = Array.from({ length: 7 }, (_, i) => {
     const date = subDays(today, 6 - i);
@@ -32,12 +36,62 @@ export function Dashboard() {
       .filter((m) => m.type === 'saida')
       .reduce((sum, m) => sum + m.quantity, 0);
 
+    const servicos = sales
+      .filter((s) => format(new Date(s.created_at), 'yyyy-MM-dd') === dateStr)
+      .reduce(
+        (sum, s) => sum + s.services.reduce((sv, item) => sv + item.quantity, 0),
+        0
+      );
+
     return {
       date: format(date, 'EEE', { locale: ptBR }),
       Entradas: entries,
-      Saídas: exits,
+      Vendas: exits,
+      Serviços: servicos,
     };
   });
+
+  // Unified activity feed — movements + service sales merged by date
+  type ActivityItem = {
+    id: string
+    kind: 'entrada' | 'saida' | 'servico'
+    title: string
+    date: string
+    quantity: number
+    user: string
+  }
+
+  const movementItems: ActivityItem[] = movements.map((m) => ({
+    id: `mov-${m.id}`,
+    kind: m.type,
+    title: m.product.name,
+    date: m.created_at,
+    quantity: m.quantity,
+    user: m.user.name,
+  }))
+
+  const serviceItems: ActivityItem[] = sales
+    .filter((s) => s.services.length > 0)
+    .map((s) => {
+      const totalQty = s.services.reduce((sum, sv) => sum + sv.quantity, 0)
+      const names = s.services.map((sv) => sv.service.name)
+      const title =
+        names.length === 1
+          ? names[0]
+          : `${names[0]} + ${names.length - 1} ${names.length - 1 === 1 ? 'outro' : 'outros'}`
+      return {
+        id: `sale-${s.id}`,
+        kind: 'servico' as const,
+        title,
+        date: s.created_at,
+        quantity: totalQty,
+        user: s.user.name,
+      }
+    })
+
+  const recentActivities = [...movementItems, ...serviceItems]
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .slice(0, 8)
 
   if (loadingSummary) {
     return (
@@ -54,16 +108,17 @@ export function Dashboard() {
         <h1 className="text-3xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D] mb-2">
           Dashboard
         </h1>
-        <p className="text-[#2D2D2D]/60">
-          Bem-vindo, {user?.name}
-        </p>
+        <p className="text-[#2D2D2D]/60">Bem-vindo, {user?.name}</p>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-          <div className="flex items-start justify-between mb-4">
-            <div className="w-12 h-12 bg-[#111111] rounded-xl flex items-center justify-center">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <button
+          onClick={() => navigate('/estoque')}
+          className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 text-left hover:border-[#111111] hover:shadow-md transition-all group"
+        >
+          <div className="mb-4">
+            <div className="w-12 h-12 bg-[#111111] rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
               <Package className="w-6 h-6 text-white" />
             </div>
           </div>
@@ -71,35 +126,59 @@ export function Dashboard() {
           <p className="text-3xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D]">
             {summary?.total_stock ?? 0}
           </p>
-        </div>
+        </button>
 
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-          <div className="flex items-start justify-between mb-4">
-            <div className="w-12 h-12 bg-[#22C55E] rounded-xl flex items-center justify-center">
+        <button
+          onClick={() => navigate('/entrada')}
+          className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 text-left hover:border-[#22C55E] hover:shadow-md transition-all group"
+        >
+          <div className="mb-4">
+            <div className="w-12 h-12 bg-[#22C55E] rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
               <TrendingDown className="w-6 h-6 text-white" />
             </div>
           </div>
-          <p className="text-[#2D2D2D]/60 text-sm mb-1">Entradas Hoje</p>
+          <p className="text-[#2D2D2D]/60 text-sm mb-1">Entrada no Estoque hoje</p>
           <p className="text-3xl font-['Barlow_Condensed'] font-bold text-[#22C55E]">
             {summary?.entries_today ?? 0}
           </p>
-        </div>
+        </button>
 
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-          <div className="flex items-start justify-between mb-4">
-            <div className="w-12 h-12 bg-[#F97316] rounded-xl flex items-center justify-center">
+        <button
+          onClick={() => navigate('/saida')}
+          className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 text-left hover:border-[#F97316] hover:shadow-md transition-all group"
+        >
+          <div className="mb-4">
+            <div className="w-12 h-12 bg-[#F97316] rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
               <TrendingUp className="w-6 h-6 text-white" />
             </div>
           </div>
-          <p className="text-[#2D2D2D]/60 text-sm mb-1">Saídas Hoje</p>
+          <p className="text-[#2D2D2D]/60 text-sm mb-1">Vendas hoje</p>
           <p className="text-3xl font-['Barlow_Condensed'] font-bold text-[#F97316]">
-            {summary?.exits_today ?? 0}
+            {summary?.sales_today ?? 0}
           </p>
-        </div>
+        </button>
 
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-          <div className="flex items-start justify-between mb-4">
-            <div className="w-12 h-12 bg-[#EF4444] rounded-xl flex items-center justify-center">
+        <button
+          onClick={() => navigate('/servicos')}
+          className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 text-left hover:border-[#2D2D2D] hover:shadow-md transition-all group"
+        >
+          <div className="mb-4">
+            <div className="w-12 h-12 bg-[#2D2D2D] rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+              <Wrench className="w-6 h-6 text-white" />
+            </div>
+          </div>
+          <p className="text-[#2D2D2D]/60 text-sm mb-1">Serviços hoje</p>
+          <p className="text-3xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D]">
+            {summary?.services_today ?? 0}
+          </p>
+        </button>
+
+        <button
+          onClick={() => navigate('/estoque')}
+          className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 text-left hover:border-[#EF4444] hover:shadow-md transition-all group"
+        >
+          <div className="mb-4">
+            <div className="w-12 h-12 bg-[#EF4444] rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
               <AlertTriangle className="w-6 h-6 text-white" />
             </div>
           </div>
@@ -107,7 +186,7 @@ export function Dashboard() {
           <p className="text-3xl font-['Barlow_Condensed'] font-bold text-[#EF4444]">
             {summary?.low_stock_count ?? 0}
           </p>
-        </div>
+        </button>
       </div>
 
       {/* Quick Actions */}
@@ -133,7 +212,7 @@ export function Dashboard() {
             <div className="w-12 h-12 bg-[#EF4444]/10 group-hover:bg-white/20 rounded-xl flex items-center justify-center transition-colors">
               <Minus className="w-6 h-6" />
             </div>
-            <span className="text-sm font-medium text-center">Registrar Saída</span>
+            <span className="text-sm font-medium text-center">Registrar Venda</span>
           </Link>
 
           <Link
@@ -171,10 +250,10 @@ export function Dashboard() {
       {/* Chart */}
       <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
         <h2 className="text-xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D] mb-6">
-          Movimentações - Últimos 7 dias
+          Movimentações — Últimos 7 dias
         </h2>
         <div className="h-64">
-          {loadingMovements ? (
+          {loadingMovements || loadingSales ? (
             <div className="flex items-center justify-center h-full">
               <Loader2 className="w-6 h-6 animate-spin text-[#F97316]" />
             </div>
@@ -183,66 +262,84 @@ export function Dashboard() {
               <BarChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="date" stroke="#2D2D2D" />
-                <YAxis stroke="#2D2D2D" />
+                <YAxis stroke="#2D2D2D" allowDecimals={false} />
                 <Tooltip />
                 <Legend />
                 <Bar dataKey="Entradas" fill="#22C55E" radius={[8, 8, 0, 0]} />
-                <Bar dataKey="Saídas" fill="#F97316" radius={[8, 8, 0, 0]} />
+                <Bar dataKey="Vendas" fill="#F97316" radius={[8, 8, 0, 0]} />
+                <Bar dataKey="Serviços" fill="#111111" radius={[8, 8, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
         </div>
       </div>
 
-      {/* Recent Movements */}
+      {/* Recent Activities */}
       <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
         <h2 className="text-xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D] mb-4">
           Últimas Movimentações
         </h2>
         <div className="space-y-3">
-          {movements.slice(0, 5).map((movement) => (
-            <div
-              key={movement.id}
-              className="flex items-center justify-between p-4 bg-[#F5F5F5] rounded-xl"
-            >
-              <div className="flex items-center gap-4 flex-1">
-                <div
-                  className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                    movement.type === 'entrada'
-                      ? 'bg-[#22C55E]/10 text-[#22C55E]'
-                      : 'bg-[#F97316]/10 text-[#F97316]'
-                  }`}
-                >
-                  {movement.type === 'entrada' ? (
-                    <TrendingDown className="w-5 h-5" />
-                  ) : (
-                    <TrendingUp className="w-5 h-5" />
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-[#2D2D2D] truncate">
-                    {movement.product.name}
-                  </p>
-                  <p className="text-sm text-[#2D2D2D]/60">
-                    {format(new Date(movement.created_at), "dd/MM/yyyy 'às' HH:mm", {
-                      locale: ptBR,
-                    })}
-                  </p>
-                </div>
-              </div>
-              <div className="text-right ml-4">
-                <p
-                  className={`text-lg font-['Barlow_Condensed'] font-bold ${
-                    movement.type === 'entrada' ? 'text-[#22C55E]' : 'text-[#F97316]'
-                  }`}
-                >
-                  {movement.type === 'entrada' ? '+' : '-'}
-                  {movement.quantity}
-                </p>
-                <p className="text-xs text-[#2D2D2D]/60">{movement.user.name}</p>
-              </div>
+          {loadingMovements || loadingSales ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin text-[#F97316]" />
             </div>
-          ))}
+          ) : recentActivities.length === 0 ? (
+            <p className="text-center text-[#2D2D2D]/40 py-8">Nenhuma atividade recente.</p>
+          ) : (
+            recentActivities.map((item) => (
+              <div
+                key={item.id}
+                className="flex items-center justify-between p-4 bg-[#F5F5F5] rounded-xl"
+              >
+                <div className="flex items-center gap-4 flex-1">
+                  <div
+                    className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                      item.kind === 'entrada'
+                        ? 'bg-[#22C55E]/10 text-[#22C55E]'
+                        : item.kind === 'saida'
+                        ? 'bg-[#F97316]/10 text-[#F97316]'
+                        : 'bg-[#111111]/10 text-[#2D2D2D]'
+                    }`}
+                  >
+                    {item.kind === 'entrada' ? (
+                      <TrendingDown className="w-5 h-5" />
+                    ) : item.kind === 'saida' ? (
+                      <TrendingUp className="w-5 h-5" />
+                    ) : (
+                      <Wrench className="w-5 h-5" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-[#2D2D2D] truncate">{item.title}</p>
+                    <p className="text-sm text-[#2D2D2D]/60">
+                      {format(new Date(item.date), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right ml-4 flex-shrink-0">
+                  <p
+                    className={`text-lg font-['Barlow_Condensed'] font-bold ${
+                      item.kind === 'entrada'
+                        ? 'text-[#22C55E]'
+                        : item.kind === 'saida'
+                        ? 'text-[#F97316]'
+                        : 'text-[#2D2D2D]'
+                    }`}
+                  >
+                    {item.kind === 'entrada' ? '+' : item.kind === 'saida' ? '-' : ''}
+                    {item.quantity}
+                    {item.kind === 'servico' && (
+                      <span className="text-sm font-normal ml-1">
+                        {item.quantity === 1 ? 'serviço' : 'serviços'}
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-xs text-[#2D2D2D]/60">{item.user}</p>
+                </div>
+              </div>
+            ))
+          )}
         </div>
         <Link
           to="/historico"
