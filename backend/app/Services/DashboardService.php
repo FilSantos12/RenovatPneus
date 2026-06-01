@@ -25,7 +25,7 @@ class DashboardService
             'movements_today' => Movement::whereDate('created_at', $today)->count(),
             'entries_today' => Movement::whereDate('created_at', $today)->where('type', 'entrada')->count(),
             'exits_today' => Movement::whereDate('created_at', $today)->where('type', 'saida')->count(),
-            'sales_today' => Sale::whereDate('created_at', $today)->count(),
+            'sales_today' => Sale::whereDate('created_at', $today)->whereHas('items')->count(),
             'services_today' => SaleService::whereDate('created_at', $today)->sum('quantity'),
             'revenue_today' => Sale::whereDate('created_at', $today)->where('status', 'pago')->sum('total'),
             'low_stock_products' => $lowStockProducts,

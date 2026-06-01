@@ -122,7 +122,7 @@ export function Dashboard() {
               <Package className="w-6 h-6 text-white" />
             </div>
           </div>
-          <p className="text-[#2D2D2D]/60 text-sm mb-1">Estoque Total</p>
+          <p className="text-[#2D2D2D]/60 text-sm mb-1">Estoque total de produtos</p>
           <p className="text-3xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D]">
             {summary?.total_stock ?? 0}
           </p>
@@ -137,7 +137,7 @@ export function Dashboard() {
               <TrendingDown className="w-6 h-6 text-white" />
             </div>
           </div>
-          <p className="text-[#2D2D2D]/60 text-sm mb-1">Entrada no Estoque hoje</p>
+          <p className="text-[#2D2D2D]/60 text-sm mb-1">Entrada no Estoque</p>
           <p className="text-3xl font-['Barlow_Condensed'] font-bold text-[#22C55E]">
             {summary?.entries_today ?? 0}
           </p>
@@ -152,7 +152,7 @@ export function Dashboard() {
               <TrendingUp className="w-6 h-6 text-white" />
             </div>
           </div>
-          <p className="text-[#2D2D2D]/60 text-sm mb-1">Vendas hoje</p>
+          <p className="text-[#2D2D2D]/60 text-sm mb-1">Vendas Pneus hoje</p>
           <p className="text-3xl font-['Barlow_Condensed'] font-bold text-[#F97316]">
             {summary?.sales_today ?? 0}
           </p>
@@ -167,7 +167,7 @@ export function Dashboard() {
               <Wrench className="w-6 h-6 text-white" />
             </div>
           </div>
-          <p className="text-[#2D2D2D]/60 text-sm mb-1">Serviços hoje</p>
+          <p className="text-[#2D2D2D]/60 text-sm mb-1">Serviços executados hoje</p>
           <p className="text-3xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D]">
             {summary?.services_today ?? 0}
           </p>
@@ -182,7 +182,7 @@ export function Dashboard() {
               <AlertTriangle className="w-6 h-6 text-white" />
             </div>
           </div>
-          <p className="text-[#2D2D2D]/60 text-sm mb-1">Estoque Baixo</p>
+          <p className="text-[#2D2D2D]/60 text-sm mb-1">Estoque baixo de produtos</p>
           <p className="text-3xl font-['Barlow_Condensed'] font-bold text-[#EF4444]">
             {summary?.low_stock_count ?? 0}
           </p>
