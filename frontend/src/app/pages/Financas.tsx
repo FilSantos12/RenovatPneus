@@ -1,304 +1,370 @@
-import { DollarSign, TrendingUp, ShoppingCart, CreditCard, Download, Loader2 } from 'lucide-react';
-import { useSales } from '@/hooks/useSales';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from 'recharts';
-import { format, subDays } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
-import { useState } from 'react';
-import { toast } from 'sonner';
-import type { PaymentMethod } from '../types';
+import { useState } from 'react'
+import { AlertTriangle, TrendingUp, TrendingDown, DollarSign, BarChart2 } from 'lucide-react'
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+} from 'recharts'
+import { useFinanceSummary } from '@/hooks/useFinance'
+import type { FinancePeriod } from '@/services/finance.service'
 
-const PAYMENT_LABELS: Record<PaymentMethod, string> = {
-  pix: 'PIX',
+const formatMoney = (value: number) =>
+  value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+
+function LegendDot({ color, label }: { color: string; label: string }) {
+  return (
+    <div className="flex items-center gap-1.5 text-xs text-gray-500">
+      <div className="w-2.5 h-2.5 rounded-sm" style={{ background: color }} />
+      {label}
+    </div>
+  )
+}
+
+const PAYMENT_LABELS: Record<string, string> = {
+  pix: 'Pix',
   dinheiro: 'Dinheiro',
-  cartao_credito: 'Cartão de Crédito',
-  cartao_debito: 'Cartão de Débito',
+  cartao_credito: 'Crédito',
+  cartao_debito: 'Débito',
   fiado: 'Fiado',
-};
+}
 
-const PAYMENT_COLORS: Record<PaymentMethod, string> = {
-  pix: '#10B981',
+const PAYMENT_COLORS: Record<string, string> = {
+  pix: '#3b82f6',
   dinheiro: '#22C55E',
-  cartao_credito: '#F97316',
-  cartao_debito: '#EF4444',
-  fiado: '#8B5CF6',
-};
+  cartao_credito: '#a855f7',
+  cartao_debito: '#8b5cf6',
+  fiado: '#EF4444',
+}
+
+const STATUS_STYLE: Record<string, string> = {
+  pago: 'bg-green-100 text-green-800',
+  pendente: 'bg-yellow-100 text-yellow-800',
+  cancelado: 'bg-gray-100 text-gray-600',
+}
+
+const STATUS_LABEL: Record<string, string> = {
+  pago: 'pago',
+  pendente: 'fiado',
+  cancelado: 'cancelado',
+}
+
+const PERIODS: { value: FinancePeriod; label: string }[] = [
+  { value: 'today', label: 'Hoje' },
+  { value: 'month', label: 'Este mês' },
+  { value: 'year', label: 'Este ano' },
+]
 
 export function Financas() {
-  const [filterPeriod, setFilterPeriod] = useState<'today' | 'week' | 'month' | 'all'>('week');
+  const [period, setPeriod] = useState<FinancePeriod>('month')
+  const { data, isLoading } = useFinanceSummary(period)
 
-  const { data, isLoading } = useSales();
-  const allSales = data?.data ?? [];
+  const paymentData = data
+    ? Object.entries(data.payment_methods).map(([key, val]) => ({
+        name: PAYMENT_LABELS[key] ?? key,
+        value: Number(val.total),
+        color: PAYMENT_COLORS[key] ?? '#9ca3af',
+      }))
+    : []
 
-  const today = new Date();
-  const now = Date.now();
-
-  const getFilteredSales = () => {
-    switch (filterPeriod) {
-      case 'today':
-        return allSales.filter(
-          (s) => format(new Date(s.created_at), 'yyyy-MM-dd') === format(today, 'yyyy-MM-dd')
-        );
-      case 'week':
-        return allSales.filter((s) => new Date(s.created_at).getTime() >= now - 7 * 24 * 60 * 60 * 1000);
-      case 'month':
-        return allSales.filter((s) => new Date(s.created_at).getTime() >= now - 30 * 24 * 60 * 60 * 1000);
-      default:
-        return allSales;
-    }
-  };
-
-  const filteredSales = getFilteredSales();
-
-  const totalRevenue = filteredSales.reduce((sum, s) => sum + Number(s.total), 0);
-  const totalSales = filteredSales.length;
-  const averageTicket = totalSales > 0 ? totalRevenue / totalSales : 0;
-
-  const totalProducts = filteredSales.reduce(
-    (sum, s) => sum + s.items.reduce((itemSum, item) => itemSum + item.quantity, 0),
-    0
-  );
-  const totalServices = filteredSales.reduce(
-    (sum, s) => sum + s.services.reduce((serviceSum, sv) => serviceSum + sv.quantity, 0),
-    0
-  );
-
-  const paymentMethods: PaymentMethod[] = ['pix', 'dinheiro', 'cartao_credito', 'cartao_debito', 'fiado'];
-  const paymentMethodData = paymentMethods
-    .map((method) => ({
-      name: PAYMENT_LABELS[method],
-      value: filteredSales
-        .filter((s) => s.payment_method === method)
-        .reduce((sum, s) => sum + Number(s.total), 0),
-      color: PAYMENT_COLORS[method],
-    }))
-    .filter((item) => item.value > 0);
-
-  const dailyRevenueData = Array.from({ length: 7 }, (_, i) => {
-    const date = subDays(today, 6 - i);
-    const dateStr = format(date, 'yyyy-MM-dd');
-
-    const daySales = allSales.filter(
-      (s) => format(new Date(s.created_at), 'yyyy-MM-dd') === dateStr
-    );
-    const revenue = daySales.reduce((sum, s) => sum + Number(s.total), 0);
-
-    return {
-      date: format(date, 'EEE', { locale: ptBR }),
-      Receita: revenue,
-    };
-  });
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-full min-h-[400px]">
-        <Loader2 className="w-8 h-8 animate-spin text-[#F97316]" />
-      </div>
-    );
-  }
+  const isEmpty = !isLoading && data !== undefined && data.recent_sales.length === 0
 
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-6">
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D] mb-2">
-            Finanças
-          </h1>
-          <p className="text-[#2D2D2D]/60">Acompanhe as vendas e receitas</p>
-        </div>
-
+        <h1 className="text-3xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D]">
+          Finanças
+        </h1>
         <div className="flex gap-2">
-          {(['today', 'week', 'month', 'all'] as const).map((period) => {
-            const labels = { today: 'Hoje', week: '7 dias', month: '30 dias', all: 'Tudo' };
-            return (
-              <button
-                key={period}
-                onClick={() => setFilterPeriod(period)}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                  filterPeriod === period
-                    ? 'bg-[#F97316] text-white'
-                    : 'bg-white text-[#2D2D2D] hover:bg-gray-100'
-                }`}
-              >
-                {labels[period]}
-              </button>
-            );
-          })}
+          {PERIODS.map(({ value, label }) => (
+            <button
+              key={value}
+              onClick={() => setPeriod(value)}
+              style={{
+                minHeight: '48px',
+                borderRadius: '12px',
+                background: period === value ? '#F97316' : 'white',
+                color: period === value ? 'white' : '#6b7280',
+                border: '0.5px solid #e5e7eb',
+              }}
+              className="px-4 font-medium transition-colors"
+            >
+              {label}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-          <div className="flex items-start justify-between mb-4">
-            <div className="w-12 h-12 bg-[#22C55E] rounded-xl flex items-center justify-center">
-              <DollarSign className="w-6 h-6 text-white" />
-            </div>
-          </div>
-          <p className="text-[#2D2D2D]/60 text-sm mb-1">Receita Total</p>
-          <p className="text-3xl font-['Barlow_Condensed'] font-bold text-[#22C55E]">
-            R$ {totalRevenue.toFixed(2)}
+      {/* Fiado alert */}
+      {data && data.fiado_count > 0 && (
+        <div
+          className="flex items-center gap-3 px-4 py-3 rounded-2xl"
+          style={{ background: '#fff7ed', border: '1px solid #fed7aa' }}
+        >
+          <AlertTriangle className="w-5 h-5 flex-shrink-0" style={{ color: '#F97316' }} />
+          <p className="text-sm" style={{ color: '#9a3412' }}>
+            <strong>{data.fiado_count}</strong>{' '}
+            venda{data.fiado_count !== 1 ? 's' : ''} no fiado em aberto —{' '}
+            {formatMoney(Number(data.fiado_total))} a receber
           </p>
         </div>
+      )}
 
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-          <div className="flex items-start justify-between mb-4">
-            <div className="w-12 h-12 bg-[#F97316] rounded-xl flex items-center justify-center">
-              <ShoppingCart className="w-6 h-6 text-white" />
+      {/* Summary cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {isLoading ? (
+          <>
+            <div className="h-28 bg-gray-100 rounded-2xl animate-pulse" />
+            <div className="h-28 bg-gray-100 rounded-2xl animate-pulse" />
+            <div className="h-28 bg-gray-100 rounded-2xl animate-pulse" />
+          </>
+        ) : (
+          <>
+            {/* Receita */}
+            <div
+              className="bg-white flex overflow-hidden"
+              style={{ borderRadius: '16px', border: '0.5px solid #e5e7eb' }}
+            >
+              <div className="w-1 flex-shrink-0" style={{ background: '#22C55E' }} />
+              <div className="flex-1 px-6 py-5">
+                <div className="flex items-center gap-3 mb-3">
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center"
+                    style={{ background: '#dcfce7' }}
+                  >
+                    <TrendingUp className="w-5 h-5" style={{ color: '#22C55E' }} />
+                  </div>
+                  <p className="text-xs text-gray-500">Receita total</p>
+                </div>
+                <p className="font-medium" style={{ fontSize: '22px', color: '#2D2D2D' }}>
+                  {formatMoney(Number(data?.revenue ?? 0))}
+                </p>
+              </div>
             </div>
-          </div>
-          <p className="text-[#2D2D2D]/60 text-sm mb-1">Total de Vendas</p>
-          <p className="text-3xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D]">
-            {totalSales}
-          </p>
-        </div>
 
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-          <div className="flex items-start justify-between mb-4">
-            <div className="w-12 h-12 bg-[#111111] rounded-xl flex items-center justify-center">
-              <TrendingUp className="w-6 h-6 text-white" />
+            {/* Custo */}
+            <div
+              className="bg-white flex overflow-hidden"
+              style={{ borderRadius: '16px', border: '0.5px solid #e5e7eb' }}
+            >
+              <div className="w-1 flex-shrink-0" style={{ background: '#EF4444' }} />
+              <div className="flex-1 px-6 py-5">
+                <div className="flex items-center gap-3 mb-3">
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center"
+                    style={{ background: '#fee2e2' }}
+                  >
+                    <TrendingDown className="w-5 h-5" style={{ color: '#EF4444' }} />
+                  </div>
+                  <p className="text-xs text-gray-500">Custo dos produtos</p>
+                </div>
+                <p className="font-medium" style={{ fontSize: '22px', color: '#2D2D2D' }}>
+                  {formatMoney(Number(data?.cost ?? 0))}
+                </p>
+                <p className="text-xs text-gray-400 mt-1">Preço de custo dos itens vendidos</p>
+              </div>
             </div>
-          </div>
-          <p className="text-[#2D2D2D]/60 text-sm mb-1">Ticket Médio</p>
-          <p className="text-3xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D]">
-            R$ {averageTicket.toFixed(2)}
-          </p>
-        </div>
 
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-          <div className="flex items-start justify-between mb-4">
-            <div className="w-12 h-12 bg-[#3B82F6] rounded-xl flex items-center justify-center">
-              <CreditCard className="w-6 h-6 text-white" />
+            {/* Lucro */}
+            <div
+              className="bg-white flex overflow-hidden"
+              style={{ borderRadius: '16px', border: '0.5px solid #e5e7eb' }}
+            >
+              <div className="w-1 flex-shrink-0" style={{ background: '#F97316' }} />
+              <div className="flex-1 px-6 py-5">
+                <div className="flex items-center gap-3 mb-3">
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center"
+                    style={{ background: '#fff7ed' }}
+                  >
+                    <DollarSign className="w-5 h-5" style={{ color: '#F97316' }} />
+                  </div>
+                  <p className="text-xs text-gray-500">Lucro estimado</p>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="font-medium" style={{ fontSize: '22px', color: '#2D2D2D' }}>
+                    {formatMoney(Number(data?.profit ?? 0))}
+                  </p>
+                  {data && data.margin > 0 && (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
+                      Margem: {data.margin}%
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
-          <p className="text-[#2D2D2D]/60 text-sm mb-1">Produtos / Serviços</p>
-          <p className="text-3xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D]">
-            {totalProducts} / {totalServices}
-          </p>
-        </div>
+          </>
+        )}
       </div>
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-          <h2 className="text-xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D] mb-6">
-            Receita - Últimos 7 dias
-          </h2>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={dailyRevenueData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="date" stroke="#2D2D2D" />
-                <YAxis stroke="#2D2D2D" />
-                <Tooltip formatter={(value: number) => `R$ ${value.toFixed(2)}`} />
-                <Legend />
-                <Bar dataKey="Receita" fill="#22C55E" radius={[8, 8, 0, 0]} />
+      {/* Empty state */}
+      {isEmpty && (
+        <div className="text-center py-16 text-gray-400">
+          <BarChart2 size={40} className="mx-auto mb-3 opacity-30" />
+          <p className="text-sm">Nenhuma venda registrada neste período.</p>
+        </div>
+      )}
+
+      {/* Bar chart — Receita × Custo × Lucro */}
+      {!isEmpty && (
+        <div
+          className="bg-white px-6 py-5"
+          style={{ borderRadius: '16px', border: '0.5px solid #e5e7eb' }}
+        >
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-['Barlow_Condensed'] font-bold text-lg text-[#2D2D2D]">
+              Receita × Custo × Lucro
+            </h2>
+            <div className="flex gap-4">
+              <LegendDot color="#22C55E" label="Receita" />
+              <LegendDot color="#EF4444" label="Custo" />
+              <LegendDot color="#F97316" label="Lucro" />
+            </div>
+          </div>
+          {isLoading ? (
+            <div className="h-52 bg-gray-100 rounded-xl animate-pulse" />
+          ) : (
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={data?.series ?? []} barGap={4} barCategoryGap="30%">
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" vertical={false} />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 11, fill: '#9ca3af' }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  tick={{ fontSize: 11, fill: '#9ca3af' }}
+                  axisLine={false}
+                  tickLine={false}
+                  tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}k`}
+                />
+                <Tooltip
+                  formatter={(value: number) => formatMoney(value)}
+                  contentStyle={{ borderRadius: 8, border: '0.5px solid #e5e7eb', fontSize: 12 }}
+                />
+                <Bar dataKey="revenue" name="Receita" fill="#22C55E" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="cost" name="Custo" fill="#EF4444" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="profit" name="Lucro" fill="#F97316" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-          <h2 className="text-xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D] mb-6">
-            Formas de Pagamento
-          </h2>
-          {paymentMethodData.length > 0 ? (
-            <div className="h-64 flex items-center justify-center">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={paymentMethodData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {paymentMethodData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(value: number) => `R$ ${value.toFixed(2)}`} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <div className="h-64 flex items-center justify-center text-[#2D2D2D]/40">
-              Nenhuma venda no período
-            </div>
           )}
         </div>
-      </div>
+      )}
 
-      {/* Recent Sales */}
-      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D]">
-            Vendas Recentes
-          </h2>
-          <button
-            onClick={() => toast.success('Exportando relatório...')}
-            className="flex items-center gap-2 px-4 py-2 text-[#F97316] hover:bg-[#F97316]/5 rounded-lg transition-colors"
+      {/* Bottom row: donut + recent sales */}
+      {!isEmpty && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Donut — formas de pagamento */}
+          <div
+            className="bg-white px-6 py-5"
+            style={{ borderRadius: '16px', border: '0.5px solid #e5e7eb' }}
           >
-            <Download className="w-4 h-4" />
-            Exportar
-          </button>
-        </div>
+            <h2 className="font-['Barlow_Condensed'] font-bold text-lg text-[#2D2D2D] mb-4">
+              Formas de pagamento
+            </h2>
+            {isLoading ? (
+              <div className="h-44 bg-gray-100 rounded-xl animate-pulse" />
+            ) : paymentData.length === 0 ? (
+              <div className="h-44 flex items-center justify-center text-sm text-gray-400">
+                Nenhum pagamento registrado
+              </div>
+            ) : (
+              <>
+                <ResponsiveContainer width="100%" height={180}>
+                  <PieChart>
+                    <Pie
+                      data={paymentData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={55}
+                      outerRadius={80}
+                      paddingAngle={3}
+                      dataKey="value"
+                    >
+                      {paymentData.map((entry, index) => (
+                        <Cell key={index} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(value: number) => formatMoney(value)}
+                      contentStyle={{ borderRadius: 8, border: '0.5px solid #e5e7eb', fontSize: 12 }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="flex flex-wrap gap-3 mt-2">
+                  {paymentData.map((item) => (
+                    <div key={item.name} className="flex items-center gap-1 text-xs text-gray-500">
+                      <div className="w-2 h-2 rounded-sm" style={{ background: item.color }} />
+                      {item.name}{' '}
+                      {data && data.revenue > 0
+                        ? `${((item.value / Number(data.revenue)) * 100).toFixed(0)}%`
+                        : ''}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-200">
-                <th className="text-left py-3 px-4 text-[#2D2D2D]/60 font-medium text-sm">Data</th>
-                <th className="text-left py-3 px-4 text-[#2D2D2D]/60 font-medium text-sm">Cliente</th>
-                <th className="text-left py-3 px-4 text-[#2D2D2D]/60 font-medium text-sm">Itens</th>
-                <th className="text-left py-3 px-4 text-[#2D2D2D]/60 font-medium text-sm">Pagamento</th>
-                <th className="text-left py-3 px-4 text-[#2D2D2D]/60 font-medium text-sm">Operador</th>
-                <th className="text-right py-3 px-4 text-[#2D2D2D]/60 font-medium text-sm">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredSales.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="text-center py-8 text-[#2D2D2D]/40">
-                    Nenhuma venda encontrada no período selecionado
-                  </td>
-                </tr>
-              ) : (
-                filteredSales.slice(0, 10).map((sale) => (
-                  <tr key={sale.id} className="border-b border-gray-100 hover:bg-[#F5F5F5] transition-colors">
-                    <td className="py-4 px-4">
-                      <p className="text-[#2D2D2D] font-medium">
-                        {format(new Date(sale.created_at), 'dd/MM/yyyy', { locale: ptBR })}
+          {/* Recent sales */}
+          <div
+            className="bg-white px-6 py-5"
+            style={{ borderRadius: '16px', border: '0.5px solid #e5e7eb' }}
+          >
+            <h2 className="font-['Barlow_Condensed'] font-bold text-lg text-[#2D2D2D] mb-4">
+              Últimas vendas
+            </h2>
+            {isLoading ? (
+              <div className="space-y-3">
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="h-12 bg-gray-100 rounded-xl animate-pulse" />
+                ))}
+              </div>
+            ) : !data?.recent_sales?.length ? (
+              <div className="py-8 text-center text-sm text-gray-400">
+                Nenhuma venda no período
+              </div>
+            ) : (
+              <div>
+                {data.recent_sales.map((sale, idx) => (
+                  <div
+                    key={sale.id}
+                    className={`py-3 ${idx < data.recent_sales.length - 1 ? 'border-b border-gray-100' : ''}`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-sm font-medium text-[#2D2D2D] leading-snug">
+                        {sale.description}
                       </p>
-                      <p className="text-sm text-[#2D2D2D]/60">
-                        {format(new Date(sale.created_at), 'HH:mm', { locale: ptBR })}
+                      <p className="text-sm font-['Barlow_Condensed'] font-bold text-[#22C55E] flex-shrink-0">
+                        {formatMoney(Number(sale.total))}
                       </p>
-                    </td>
-                    <td className="py-4 px-4 text-[#2D2D2D]">{sale.customer_name ?? '-'}</td>
-                    <td className="py-4 px-4">
-                      <p className="text-[#2D2D2D]">{sale.items.length} produto(s)</p>
-                      <p className="text-sm text-[#2D2D2D]/60">{sale.services.length} serviço(s)</p>
-                    </td>
-                    <td className="py-4 px-4">
-                      <span className="inline-block px-2 py-1 bg-[#F5F5F5] rounded text-xs font-medium text-[#2D2D2D]">
-                        {PAYMENT_LABELS[sale.payment_method] ?? sale.payment_method}
+                    </div>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <p className="text-xs text-gray-400">
+                        {sale.created_at}
+                        {sale.user_name ? ` · ${sale.user_name}` : ''}
+                      </p>
+                      <span
+                        className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_STYLE[sale.status] ?? 'bg-gray-100 text-gray-600'}`}
+                      >
+                        {STATUS_LABEL[sale.status] ?? sale.status}
                       </span>
-                    </td>
-                    <td className="py-4 px-4 text-[#2D2D2D]/60">{sale.user.name}</td>
-                    <td className="py-4 px-4 text-right">
-                      <p className="text-[#22C55E] font-['Barlow_Condensed'] font-bold text-lg">
-                        R$ {Number(sale.total).toFixed(2)}
-                      </p>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
-  );
+  )
 }

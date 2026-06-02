@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\FinanceController;
 use App\Http\Controllers\Api\MovementController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\SaleController;
@@ -22,6 +23,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
 
     Route::get('/dashboard', [DashboardController::class, 'summary']);
+    Route::get('/finance/summary', [FinanceController::class, 'summary']);
 
     // Rotas fixas de produtos ANTES do apiResource (evita conflito com route model binding)
     Route::get('/products/next-barcode', [ProductController::class, 'nextBarcode']);
