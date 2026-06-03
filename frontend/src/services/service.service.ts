@@ -5,11 +5,16 @@ export interface ServicePayload {
   name: string
   description?: string
   price: number
+  price_cost?: number
   active?: boolean
 }
 
 function parseService(s: Service): Service {
-  return { ...s, price: Number(s.price) }
+  return {
+    ...s,
+    price: Number(s.price),
+    price_cost: s.price_cost != null ? Number(s.price_cost) : undefined,
+  }
 }
 
 export const serviceService = {

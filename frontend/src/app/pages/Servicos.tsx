@@ -12,6 +12,7 @@ export function Servicos() {
     name: '',
     description: '',
     price: '',
+    price_cost: '',
     active: true,
   });
   const [validationErrors, setValidationErrors] = useState<Record<string, string[]>>({});
@@ -34,11 +35,12 @@ export function Servicos() {
         name: service.name,
         description: service.description ?? '',
         price: service.price.toString(),
+        price_cost: service.price_cost != null ? service.price_cost.toString() : '',
         active: service.active,
       });
     } else {
       setEditingService(null);
-      setFormData({ name: '', description: '', price: '', active: true });
+      setFormData({ name: '', description: '', price: '', price_cost: '', active: true });
     }
     setValidationErrors({});
     setShowModal(true);
@@ -47,7 +49,7 @@ export function Servicos() {
   const handleCloseModal = () => {
     setShowModal(false);
     setEditingService(null);
-    setFormData({ name: '', description: '', price: '', active: true });
+    setFormData({ name: '', description: '', price: '', price_cost: '', active: true });
     setValidationErrors({});
   };
 
@@ -59,6 +61,7 @@ export function Servicos() {
       name: formData.name,
       description: formData.description || undefined,
       price: parseFloat(formData.price),
+      price_cost: formData.price_cost ? parseFloat(formData.price_cost) : undefined,
       active: formData.active,
     };
 
@@ -175,6 +178,19 @@ export function Servicos() {
                     </p>
                   </div>
                 </div>
+                {service.price_cost != null && (
+                  <div className="flex items-center gap-2 text-[#2D2D2D]">
+                    <div className="w-8 h-8 bg-[#6366f1]/10 rounded-lg flex items-center justify-center">
+                      <DollarSign className="w-4 h-4" style={{ color: '#6366f1' }} />
+                    </div>
+                    <div>
+                      <p className="text-xs text-[#2D2D2D]/60">Custo de execução</p>
+                      <p className="font-['Barlow_Condensed'] font-bold text-lg" style={{ color: '#6366f1' }}>
+                        R$ {service.price_cost.toFixed(2)}
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-2 pt-4 border-t border-gray-100">
@@ -252,6 +268,21 @@ export function Servicos() {
                 />
                 {getFirstError(validationErrors, 'price') && (
                   <p className="text-[#EF4444] text-sm mt-1">{getFirstError(validationErrors, 'price')}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-[#2D2D2D] font-medium mb-2">Custo de execução (R$)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={formData.price_cost}
+                  onChange={(e) => setFormData({ ...formData, price_cost: e.target.value })}
+                  placeholder="0.00"
+                  className="w-full h-12 px-4 bg-[#F5F5F5] border-2 border-transparent rounded-xl focus:outline-none focus:border-[#F97316] transition-colors"
+                />
+                {getFirstError(validationErrors, 'price_cost') && (
+                  <p className="text-[#EF4444] text-sm mt-1">{getFirstError(validationErrors, 'price_cost')}</p>
                 )}
               </div>
 

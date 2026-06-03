@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { AlertTriangle, TrendingUp, TrendingDown, DollarSign, BarChart2 } from 'lucide-react'
+import { AlertTriangle, TrendingUp, TrendingDown, DollarSign, BarChart2, Wrench } from 'lucide-react'
 import {
   BarChart,
   Bar,
@@ -51,7 +51,7 @@ const STATUS_STYLE: Record<string, string> = {
 
 const STATUS_LABEL: Record<string, string> = {
   pago: 'pago',
-  pendente: 'fiado',
+  pendente: 'pendente',
   cancelado: 'cancelado',
 }
 
@@ -118,9 +118,10 @@ export function Financas() {
       )}
 
       {/* Summary cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         {isLoading ? (
           <>
+            <div className="h-28 bg-gray-100 rounded-2xl animate-pulse" />
             <div className="h-28 bg-gray-100 rounded-2xl animate-pulse" />
             <div className="h-28 bg-gray-100 rounded-2xl animate-pulse" />
             <div className="h-28 bg-gray-100 rounded-2xl animate-pulse" />
@@ -149,7 +150,7 @@ export function Financas() {
               </div>
             </div>
 
-            {/* Custo */}
+            {/* Custo dos Produtos */}
             <div
               className="bg-white flex overflow-hidden"
               style={{ borderRadius: '16px', border: '0.5px solid #e5e7eb' }}
@@ -172,7 +173,30 @@ export function Financas() {
               </div>
             </div>
 
-            {/* Lucro */}
+            {/* Custo dos Serviços */}
+            <div
+              className="bg-white flex overflow-hidden"
+              style={{ borderRadius: '16px', border: '0.5px solid #e5e7eb' }}
+            >
+              <div className="w-1 flex-shrink-0" style={{ background: '#6366f1' }} />
+              <div className="flex-1 px-6 py-5">
+                <div className="flex items-center gap-3 mb-3">
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center"
+                    style={{ background: '#eef2ff' }}
+                  >
+                    <Wrench className="w-5 h-5" style={{ color: '#6366f1' }} />
+                  </div>
+                  <p className="text-xs text-gray-500">Custo dos serviços</p>
+                </div>
+                <p className="font-medium" style={{ fontSize: '22px', color: '#2D2D2D' }}>
+                  {formatMoney(Number(data?.service_cost ?? 0))}
+                </p>
+                <p className="text-xs text-gray-400 mt-1">Custo de execução dos serviços</p>
+              </div>
+            </div>
+
+            {/* Lucro — Receita - Custo Produtos - Custo Serviços */}
             <div
               className="bg-white flex overflow-hidden"
               style={{ borderRadius: '16px', border: '0.5px solid #e5e7eb' }}

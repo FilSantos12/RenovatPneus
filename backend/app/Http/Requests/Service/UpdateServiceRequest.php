@@ -17,6 +17,7 @@ class UpdateServiceRequest extends FormRequest
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'price' => ['required', 'numeric', 'min:0'],
+            'price_cost' => ['nullable', 'numeric', 'min:0'],
             'active' => ['boolean'],
         ];
     }

@@ -6,6 +6,7 @@ export interface FinanceSummary {
   period: FinancePeriod
   revenue: number
   cost: number
+  service_cost: number
   profit: number
   margin: number
   fiado_count: number

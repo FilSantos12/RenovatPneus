@@ -70,7 +70,8 @@ frontend/
     │   ├── axios.ts            # instância Axios, interceptor 401
     │   ├── queryClient.ts      # QueryClient (staleTime 5min, retry 1)
     │   ├── errors.ts           # extractValidationErrors, getFirstError, getErrorMessage
-    │   └── barcode.ts          # generateBarcodeSVG via jsbarcode
+    │   ├── barcode.ts          # generateBarcodeSVG via jsbarcode
+    │   └── export.ts           # exportHistoricoToExcel(), exportSaleToExcel(), exportHistoricoToPDF()
     ├── services/
     │   ├── auth.service.ts     # login (→ data.user), logout, me (→ data.data)
     │   ├── product.service.ts  # parseProduct(), getNextBarcode() — normaliza decimais para Number
@@ -78,7 +79,8 @@ frontend/
     │   ├── sale.service.ts     # parseSale() normaliza total/unit_price/subtotal para Number
     │   ├── service.service.ts  # parseService() normaliza price para Number
     │   ├── user.service.ts
-    │   └── dashboard.service.ts
+    │   ├── dashboard.service.ts
+    │   └── finance.service.ts  # getSummary(period) → FinanceSummary; period: today|month|year
     ├── hooks/
     │   ├── useProducts.ts      # inclui useNextBarcode() (staleTime:0, gcTime:0)
     │   ├── useMovements.ts
@@ -86,6 +88,7 @@ frontend/
     │   ├── useServices.ts
     │   ├── useUsers.ts
     │   ├── useDashboard.ts
+    │   ├── useFinance.ts       # useFinanceSummary(period) — staleTime 2min
     │   └── useBarcodeScan.ts   # captura teclado HID (leitor USB) com buffer + timeout
     ├── styles/
     │   ├── index.css
@@ -112,6 +115,8 @@ frontend/
         │   ├── Products/
         │   │   └── ProductFormModal.tsx  # modal único criar/editar produto + scanner + barcode preview
         │   │   └── (view inline em Estoque.tsx)  # modal somente-leitura com detalhes do produto
+        │   ├── Historico/
+        │   │   └── HistoricoDetalheModal.tsx  # modal detalhe entrada/venda; exporta tipo HistoricoItem
         │   └── ui/                     # shadcn/ui — não editar diretamente
         └── pages/
             ├── Login.tsx           # navega via useEffect após isAuthenticated=true
@@ -121,8 +126,8 @@ frontend/
             ├── Saida.tsx           # usa useCreateSale(), BarcodeScanner integrado
             ├── Scanner.tsx         # usa useProducts() + useCreateMovement()
             ├── Etiquetas.tsx       # LabelsPage: preview, A4/térmica, react-to-print v3
-            ├── Historico.tsx       # usa useMovements()
-            ├── Financas.tsx        # usa useSales() — apenas ADM
+            ├── Historico.tsx       # entradas + vendas unificadas; filtros tipo/data/busca; modal detalhe; export Excel/PDF
+            ├── Financas.tsx        # useFinanceSummary(period); cards receita/custo/lucro; gráficos Recharts; apenas ADM
             ├── Servicos.tsx        # usa useServices(), CRUD completo
             ├── Usuarios.tsx        # usa useUsers(), useToggleUserActive() — apenas ADM
             └── AcessoNegado.tsx
@@ -147,6 +152,7 @@ backend/
 │   │   │   ├── Controller.php       # base: success(), deleted()
 │   │   │   ├── AuthController.php   # login → { user, message }, logout, me
 │   │   │   ├── DashboardController.php
+│   │   │   ├── FinanceController.php  # GET /finance/summary?period= → receita/custo/lucro/série/fiado
 │   │   │   ├── ProductController.php
 │   │   │   ├── MovementController.php
 │   │   │   ├── ServiceController.php
@@ -194,14 +200,14 @@ backend/
 │       ├── UserService.php
 │       └── DashboardService.php  # services_today via SaleService; sales_today usa whereHas('items') — exclui vendas só de serviço
 ├── database/
-│   ├── migrations/              # 12 migrations (+ barcode_sequences)
+│   ├── migrations/              # 13 migrations (+ barcode_sequences + add_price_cost_to_services)
 │   └── seeders/
 │       ├── DatabaseSeeder.php
 │       ├── UserSeeder.php
 │       ├── ProductSeeder.php
 │       └── ServiceSeeder.php
 ├── routes/
-│   └── api.php                  # 31 rotas registradas
+│   └── api.php                  # 33 rotas registradas
 ├── config/
 │   └── cors.php                 # supports_credentials: true, allowed_origins: FRONTEND_URL
 └── bootstrap/
@@ -227,6 +233,10 @@ Product.price_sale  // preço de venda
 Product.price_cost  // preço de custo (opcional)
 Product.low_stock   // boolean calculado pelo backend
 
+// Campos de serviço
+Service.price       // preço cobrado ao cliente
+Service.price_cost  // custo de execução (opcional, usado no cálculo de Lucro em Finanças)
+
 // Campos de movimentação (objeto aninhado)
 Movement.product.name   // não "productName"
 Movement.user.name      // não "operator"
@@ -239,7 +249,7 @@ Sale.user.name          // operador
 Sale.created_at         // não "date"
 ```
 
-**Decimais:** O Laravel retorna colunas `decimal`/`float` como **string**. Os services normalizam com `Number()` nas funções `parseProduct()`, `parseService()` e `parseSale()`. Nunca chamar `.toFixed()` diretamente em valores vindos da API sem `Number()`.
+**Decimais:** O Laravel retorna colunas `decimal`/`float` como **string**. Os services normalizam com `Number()` nas funções `parseProduct()`, `parseService()` (normaliza `price` e `price_cost`) e `parseSale()`. Nunca chamar `.toFixed()` diretamente em valores vindos da API sem `Number()`.
 
 **Login:** `AuthController::login` retorna `{ user: {...}, message: "..." }` — o service usa `data.user`. Os demais endpoints usam o padrão `{ data: {...} }` do `JsonResource` — usam `data.data`.
 
@@ -247,7 +257,7 @@ Sale.created_at         // não "date"
 
 ---
 
-## API — Rotas disponíveis (32 total)
+## API — Rotas disponíveis (33 total)
 
 | Método | Rota | Auth | Role | Descrição |
 |---|---|---|---|---|
@@ -256,6 +266,7 @@ Sale.created_at         // não "date"
 | POST | `/api/logout` | ✅ | — | Logout |
 | GET | `/api/me` | ✅ | — | Usuário autenticado |
 | GET | `/api/dashboard` | ✅ | — | Resumo do dia |
+| GET | `/api/finance/summary` | ✅ | — | Resumo financeiro por período (today\|month\|year) |
 | GET/POST | `/api/products` | ✅ | POST: adm | CRUD de produtos |
 | GET | `/api/products/next-barcode` | ✅ | adm | Preview do próximo código RNV (peekNext) |
 | GET | `/api/products/barcode/{barcode}` | ✅ | — | Busca por código de barras |
@@ -291,6 +302,9 @@ Request → Route → Middleware (auth:sanctum, role)
 - **Barcode interno:** `BarcodeSequence::generateNext()` usa `lockForUpdate()` — sem duplicatas; `peekNext()` só lê (preview sem reservar)
 - **Dashboard `sales_today`:** usa `whereHas('items')` — conta apenas vendas com produtos; venda exclusiva de serviço não entra neste contador
 - **Dashboard `services_today`:** soma `SaleService::whereDate('created_at')->sum('quantity')` — conta todos os serviços executados independente da venda ter produtos
+- **FinanceController:** conta todas as vendas não-canceladas (PAGO + PENDENTE) para receita/custo/lucro — `SaleService::store` sempre cria com PENDENTE, então filtrar só PAGO zeraria os dados. Retorna `service_cost` (soma de `Service.price_cost * quantity` dos serviços vendidos). Fórmula: `profit = revenue - cost - service_cost`
+- **Fiado alert:** `fiado_count/fiado_total` buscados globalmente (sem filtro de período) — vendas com `payment_method=fiado` e `status=pendente`
+- **Histórico unificado:** `HistoricoItem` une movimentos de entrada + vendas; saídas de estoque não aparecem (são redundantes com as vendas)
 
 ---
 
@@ -326,7 +340,7 @@ Login por **username** (não email). Email existe na tabela mas não é usado no
 | `users` | ✅ | Campo `username` único; `active` para desativar sem deletar |
 | `products` | ✅ | `barcode` único + indexado; nullable no store (gerado se vazio) |
 | `movements` | ❌ | Auditoria — nunca apaga |
-| `services` | ✅ | |
+| `services` | ✅ | Campo `price_cost` nullable — custo de execução, usado no cálculo de lucro em Finanças |
 | `sales` | ✅ | |
 | `sale_items` | ❌ | Registro financeiro — nunca apaga |
 | `sale_services` | ❌ | Registro financeiro — nunca apaga |
@@ -485,4 +499,8 @@ NSSM 2.24 (x64) em `installer/tools/nssm.exe`.
 | Geração automática de barcode interno (RNV-XXXXXX, sequencial atômico) | ✅ Concluído |
 | Sidebar reordenada + "Saída" renomeada para "Venda" | ✅ Concluído |
 | Dashboard: 5 cards clicáveis, serviços no gráfico e lista unificada | ✅ Concluído |
+| Finanças: endpoint real, cards receita/custo/lucro, gráficos Recharts, alerta fiado | ✅ Concluído |
+| Histórico: lista unificada entradas+vendas, filtros, modal detalhe, export Excel/PDF | ✅ Concluído |
+| Finanças: 4 cards (Receita, Custo Produtos, Custo Serviços, Lucro); `price_cost` em Service | ✅ Concluído |
+| Finanças: bug `STATUS_LABEL` — `pendente` exibia "fiado" incorretamente | ✅ Corrigido |
 | Fase 5 — Testes + build de produção + instalador .exe | ⏳ Pendente |

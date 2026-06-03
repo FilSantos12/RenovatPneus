@@ -35,7 +35,12 @@ class FinanceController extends Controller
             return ((float) ($item->product?->price_cost ?? 0)) * $item->quantity;
         });
 
-        $profit = (float) $revenue - $cost;
+        $serviceCost = $sales->flatMap->services->sum(function ($ss) {
+            return ((float) ($ss->service?->price_cost ?? 0)) * $ss->quantity;
+        });
+
+        // Lucro = Receita - Custo dos Produtos - Custo dos Serviços
+        $profit = (float) $revenue - $cost - $serviceCost;
         $margin = (float) $revenue > 0 ? round(($profit / (float) $revenue) * 100, 1) : 0;
 
         $fiadoTotal = Sale::where('payment_method', PaymentMethod::FIADO)
@@ -62,6 +67,7 @@ class FinanceController extends Controller
                 'period'          => $period,
                 'revenue'         => round($revenue, 2),
                 'cost'            => round($cost, 2),
+                'service_cost'    => round($serviceCost, 2),
                 'profit'          => round($profit, 2),
                 'margin'          => $margin,
                 'fiado_count'     => $fiadoCount,
@@ -103,17 +109,18 @@ class FinanceController extends Controller
             $weekEnd = $cursor->copy()->endOfWeek();
             $sales = Sale::where('status', '!=', SaleStatus::CANCELADO)
                 ->whereBetween('created_at', [$cursor, $weekEnd])
-                ->with('items.product')
+                ->with(['items.product', 'services.service'])
                 ->get();
 
-            $revenue = (float) $sales->sum('total');
-            $cost    = $sales->flatMap->items->sum(fn ($i) => ((float) ($i->product?->price_cost ?? 0)) * $i->quantity);
+            $revenue     = (float) $sales->sum('total');
+            $cost        = $sales->flatMap->items->sum(fn ($i) => ((float) ($i->product?->price_cost ?? 0)) * $i->quantity);
+            $serviceCost = $sales->flatMap->services->sum(fn ($s) => ((float) ($s->service?->price_cost ?? 0)) * $s->quantity);
 
             $weeks[] = [
                 'label'   => 'Sem ' . $cursor->weekOfMonth,
                 'revenue' => round($revenue, 2),
                 'cost'    => round($cost, 2),
-                'profit'  => round($revenue - $cost, 2),
+                'profit'  => round($revenue - $cost - $serviceCost, 2),
             ];
 
             $cursor->addWeek();
@@ -132,17 +139,18 @@ class FinanceController extends Controller
             $monthEnd = $cursor->copy()->endOfMonth();
             $sales = Sale::where('status', '!=', SaleStatus::CANCELADO)
                 ->whereBetween('created_at', [$cursor, $monthEnd])
-                ->with('items.product')
+                ->with(['items.product', 'services.service'])
                 ->get();
 
-            $revenue = (float) $sales->sum('total');
-            $cost    = $sales->flatMap->items->sum(fn ($i) => ((float) ($i->product?->price_cost ?? 0)) * $i->quantity);
+            $revenue     = (float) $sales->sum('total');
+            $cost        = $sales->flatMap->items->sum(fn ($i) => ((float) ($i->product?->price_cost ?? 0)) * $i->quantity);
+            $serviceCost = $sales->flatMap->services->sum(fn ($s) => ((float) ($s->service?->price_cost ?? 0)) * $s->quantity);
 
             $months[] = [
                 'label'   => $monthNames[$cursor->month - 1],
                 'revenue' => round($revenue, 2),
                 'cost'    => round($cost, 2),
-                'profit'  => round($revenue - $cost, 2),
+                'profit'  => round($revenue - $cost - $serviceCost, 2),
             ];
 
             $cursor->addMonth();
@@ -160,17 +168,18 @@ class FinanceController extends Controller
             $hourEnd = $cursor->copy()->addHour();
             $sales = Sale::where('status', '!=', SaleStatus::CANCELADO)
                 ->whereBetween('created_at', [$cursor, $hourEnd])
-                ->with('items.product')
+                ->with(['items.product', 'services.service'])
                 ->get();
 
-            $revenue = (float) $sales->sum('total');
-            $cost    = $sales->flatMap->items->sum(fn ($i) => ((float) ($i->product?->price_cost ?? 0)) * $i->quantity);
+            $revenue     = (float) $sales->sum('total');
+            $cost        = $sales->flatMap->items->sum(fn ($i) => ((float) ($i->product?->price_cost ?? 0)) * $i->quantity);
+            $serviceCost = $sales->flatMap->services->sum(fn ($s) => ((float) ($s->service?->price_cost ?? 0)) * $s->quantity);
 
             $hours[] = [
                 'label'   => $cursor->format('H') . 'h',
                 'revenue' => round($revenue, 2),
                 'cost'    => round($cost, 2),
-                'profit'  => round($revenue - $cost, 2),
+                'profit'  => round($revenue - $cost - $serviceCost, 2),
             ];
 
             $cursor->addHour();
