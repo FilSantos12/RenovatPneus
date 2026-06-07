@@ -14,6 +14,7 @@ import {
 } from 'recharts'
 import { useFinanceSummary } from '@/hooks/useFinance'
 import type { FinancePeriod } from '@/services/finance.service'
+import { saleStatusLabel } from '@/lib/saleStatus'
 
 const formatMoney = (value: number) =>
   value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -49,11 +50,6 @@ const STATUS_STYLE: Record<string, string> = {
   cancelado: 'bg-gray-100 text-gray-600',
 }
 
-const STATUS_LABEL: Record<string, string> = {
-  pago: 'pago',
-  pendente: 'pendente',
-  cancelado: 'cancelado',
-}
 
 const PERIODS: { value: FinancePeriod; label: string }[] = [
   { value: 'today', label: 'Hoje' },
@@ -379,7 +375,7 @@ export function Financas() {
                       <span
                         className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_STYLE[sale.status] ?? 'bg-gray-100 text-gray-600'}`}
                       >
-                        {STATUS_LABEL[sale.status] ?? sale.status}
+                        {saleStatusLabel(sale.status, sale.payment_method)}
                       </span>
                     </div>
                   </div>

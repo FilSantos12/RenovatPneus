@@ -94,6 +94,13 @@ export interface Service {
   active: boolean
 }
 
+export interface ChartDay {
+  date: string
+  entries: number
+  exits: number
+  services: number
+}
+
 export interface DashboardSummary {
   total_products: number
   total_stock: number
@@ -105,4 +112,7 @@ export interface DashboardSummary {
   services_today: number
   revenue_today: number
   low_stock_products: Product[]
+  chart: {
+    last_7_days: ChartDay[]
+  }
 }

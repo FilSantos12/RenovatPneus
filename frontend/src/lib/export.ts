@@ -1,0 +1,78 @@
+import * as XLSX from 'xlsx'
+import type { Sale, Movement } from '@/app/types'
+
+export function exportHistoricoToExcel(items: Array<{ kind: string; data: any }>) {
+  const rows = items.map(item => {
+    if (item.kind === 'entrada') {
+      const m = item.data as Movement
+      return {
+        'Data':       new Date(m.created_at).toLocaleString('pt-BR'),
+        'Tipo':       'Entrada',
+        'Produto':    m.product?.name ?? '—',
+        'Código':     m.product?.barcode ?? '—',
+        'Quantidade': m.quantity,
+        'Valor':      '—',
+        'Operador':   m.user?.name ?? '—',
+        'Observação': m.notes ?? '—',
+      }
+    } else {
+      const s = item.data as Sale
+      return {
+        'Data':       new Date(s.created_at).toLocaleString('pt-BR'),
+        'Tipo':       'Venda',
+        'Produto':    s.items?.map(i => i.product?.name).join(', ') ?? '—',
+        'Quantidade': s.items?.reduce((acc, i) => acc + i.quantity, 0) ?? 0,
+        'Valor':      Number(s.total).toFixed(2),
+        'Pagamento':  s.payment_method,
+        'Status':     s.status === 'pendente' ? 'fiado' : s.status,
+        'Cliente':    s.customer_name ?? '—',
+        'Operador':   s.user?.name ?? '—',
+      }
+    }
+  })
+
+  const ws = XLSX.utils.json_to_sheet(rows)
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Histórico')
+  ws['!cols'] = Object.keys(rows[0] ?? {}).map(() => ({ wch: 20 }))
+  XLSX.writeFile(wb, `historico-renovat-${new Date().toISOString().slice(0, 10)}.xlsx`)
+}
+
+export function exportSaleToExcel(sale: Sale) {
+  const itens = (sale.items ?? []).map(i => ({
+    'Tipo':           'Produto',
+    'Descrição':      i.product?.name ?? '—',
+    'Quantidade':     i.quantity,
+    'Preço unitário': Number(i.unit_price).toFixed(2),
+    'Subtotal':       Number(i.subtotal).toFixed(2),
+  }))
+
+  const servicos = (sale.services ?? []).map(s => ({
+    'Tipo':           'Serviço',
+    'Descrição':      s.service?.name ?? '—',
+    'Quantidade':     s.quantity,
+    'Preço unitário': Number(s.unit_price).toFixed(2),
+    'Subtotal':       Number(s.subtotal).toFixed(2),
+  }))
+
+  const rows = [
+    ...itens,
+    ...servicos,
+    {
+      'Tipo': '',
+      'Descrição': '',
+      'Quantidade': '',
+      'Preço unitário': 'TOTAL',
+      'Subtotal': Number(sale.total).toFixed(2),
+    },
+  ]
+
+  const ws = XLSX.utils.json_to_sheet(rows)
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Venda')
+  XLSX.writeFile(wb, `venda-${sale.id}-renovat.xlsx`)
+}
+
+export function exportHistoricoToPDF() {
+  window.print()
+}

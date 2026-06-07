@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { saleService, type SaleFilters, type SalePayload } from '@/services/sale.service'
 import { PRODUCT_KEYS } from './useProducts'
 import { MOVEMENT_KEYS } from './useMovements'
+import { DASHBOARD_KEYS } from './useDashboard'
 import { getErrorMessage } from '@/lib/errors'
 
 export const SALE_KEYS = {
@@ -49,6 +50,8 @@ export function useUpdateSaleStatus() {
       saleService.updateStatus(id, status, paymentMethod),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: SALE_KEYS.all })
+      queryClient.invalidateQueries({ queryKey: DASHBOARD_KEYS.summary })
+      queryClient.invalidateQueries({ queryKey: ['finance'] })
       toast.success('Status atualizado com sucesso!')
     },
     onError: (error: unknown) => {

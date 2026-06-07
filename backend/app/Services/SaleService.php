@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\PaymentMethod;
 use App\Enums\SaleStatus;
 use App\Models\Sale;
 use App\Models\User;
@@ -20,13 +21,18 @@ class SaleService
             $total = collect($items)->sum(fn ($i) => $i['quantity'] * $i['unit_price'])
                    + collect($services)->sum(fn ($s) => $s['quantity'] * $s['unit_price']);
 
+            $statusInicial = $data['payment_method'] === PaymentMethod::FIADO->value
+                ? SaleStatus::PENDENTE
+                : SaleStatus::PAGO;
+
             $sale = Sale::create([
-                'user_id' => $user->id,
-                'customer_name' => $data['customer_name'] ?? null,
+                'user_id'        => $user->id,
+                'customer_name'  => $data['customer_name'] ?? null,
                 'payment_method' => $data['payment_method'],
-                'status' => SaleStatus::PENDENTE,
-                'total' => $total,
-                'notes' => $data['notes'] ?? null,
+                'status'         => $statusInicial,
+                'paid_at'        => $statusInicial === SaleStatus::PAGO ? now() : null,
+                'total'          => $total,
+                'notes'          => $data['notes'] ?? null,
             ]);
 
             foreach ($items as $item) {

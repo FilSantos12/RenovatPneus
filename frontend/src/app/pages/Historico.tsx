@@ -1,175 +1,292 @@
-import { useState } from 'react';
-import { Download, Filter, TrendingDown, TrendingUp, Loader2 } from 'lucide-react';
-import { useMovements } from '@/hooks/useMovements';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
-import { useAuth } from '../contexts/AuthContext';
-import { toast } from 'sonner';
+import { useState, useMemo } from 'react'
+import { ArrowDown, ShoppingCart, Eye, FileSpreadsheet, FileText, Filter } from 'lucide-react'
+import { useMovements } from '@/hooks/useMovements'
+import { useSales } from '@/hooks/useSales'
+import { useAuth } from '../contexts/AuthContext'
+import { exportHistoricoToExcel, exportHistoricoToPDF } from '@/lib/export'
+import { HistoricoDetalheModal, type HistoricoItem } from '../components/Historico/HistoricoDetalheModal'
+
+const formatDate = (iso: string) =>
+  new Date(iso).toLocaleString('pt-BR', {
+    day: '2-digit', month: '2-digit', year: '2-digit',
+    hour: '2-digit', minute: '2-digit',
+  })
+
+const formatMoney = (value: number) =>
+  Number(value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+
+const buildSaleDescription = (sale: import('@/app/types').Sale): string => {
+  const first = sale.items?.[0]
+  if (!first) {
+    const firstSv = sale.services?.[0]
+    return firstSv?.service?.name ?? `Venda #${sale.id}`
+  }
+  const name = first.product?.name ?? 'Produto'
+  const truncated = name.length > 28 ? name.slice(0, 28) + '…' : name
+  const extra = (sale.items?.length ?? 0) + (sale.services?.length ?? 0) - 1
+  return truncated + (extra > 0 ? ` +${extra}` : '') + ` ×${first.quantity}`
+}
+
+const chip = (active: boolean) =>
+  `flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border transition-colors ${
+    active
+      ? 'bg-[#F97316] text-white border-[#F97316]'
+      : 'bg-white text-gray-500 border-gray-200 hover:border-orange-300'
+  }`
+
+const inputCls =
+  'h-10 px-3 bg-[#F5F5F5] border-2 border-transparent rounded-xl text-sm focus:outline-none focus:border-[#F97316] transition-colors'
 
 export function Historico() {
-  const { user } = useAuth();
-  const [filterType, setFilterType] = useState('');
+  const { user } = useAuth()
+  const [tipo, setTipo] = useState<'todos' | 'entrada' | 'venda'>('todos')
+  const [search, setSearch] = useState('')
+  const [dataInicio, setDataInicio] = useState('')
+  const [dataFim, setDataFim] = useState('')
+  const [itemSelecionado, setItemSelecionado] = useState<HistoricoItem | null>(null)
 
-  const { data, isLoading, isError } = useMovements();
-  const allMovements = data?.data ?? [];
+  const { data: movementsData, isLoading: loadingMovements } = useMovements()
+  const { data: salesData, isLoading: loadingSales } = useSales()
+  const isLoading = loadingMovements || loadingSales
 
-  const movements =
-    user?.role === 'operador'
-      ? allMovements.filter((m) => m.user.name === user.name)
-      : allMovements;
+  const items = useMemo<HistoricoItem[]>(() => {
+    const entradas: HistoricoItem[] =
+      tipo !== 'venda'
+        ? (movementsData?.data ?? [])
+            .filter(m => m.type === 'entrada')
+            .map(m => ({ kind: 'entrada' as const, data: m }))
+        : []
 
-  const filteredMovements = movements.filter((m) => {
-    if (!filterType) return true;
-    return m.type === filterType;
-  });
+    const vendas: HistoricoItem[] =
+      tipo !== 'entrada'
+        ? (salesData?.data ?? []).map(s => ({ kind: 'venda' as const, data: s }))
+        : []
 
-  const handleExport = (fmt: 'pdf' | 'excel') => {
-    toast.success(`Exportando relatório em ${fmt.toUpperCase()}...`);
-  };
+    return [...entradas, ...vendas]
+      .filter(item => {
+        if (!search) return true
+        const text =
+          item.kind === 'entrada'
+            ? (item.data.product?.name ?? '')
+            : (item.data.items?.map(i => i.product?.name).join(' ') ?? '')
+        return text.toLowerCase().includes(search.toLowerCase())
+      })
+      .filter(item => {
+        const date = new Date(item.data.created_at)
+        if (dataInicio && date < new Date(dataInicio + 'T00:00:00')) return false
+        if (dataFim && date > new Date(dataFim + 'T23:59:59')) return false
+        return true
+      })
+      .sort((a, b) => new Date(b.data.created_at).getTime() - new Date(a.data.created_at).getTime())
+  }, [movementsData, salesData, tipo, search, dataInicio, dataFim])
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full min-h-[400px]">
-        <Loader2 className="w-8 h-8 animate-spin text-[#F97316]" />
+        <div className="w-8 h-8 border-4 border-[#F97316] border-t-transparent rounded-full animate-spin" />
       </div>
-    );
-  }
-
-  if (isError) {
-    return (
-      <div className="p-8 text-center text-[#EF4444]">
-        Erro ao carregar movimentações. Tente novamente.
-      </div>
-    );
+    )
   }
 
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
+      {/* Cabeçalho imprimível (só aparece na impressão) */}
+      <div className="print-header print-only">
         <div>
-          <h1 className="text-3xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D] mb-2">
+          <strong>Renovat Pneus</strong>
+          <p>Histórico de movimentações</p>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <p>Emitido em: {new Date().toLocaleString('pt-BR')}</p>
+          <p>Filtro: {tipo === 'todos' ? 'Todos' : tipo === 'entrada' ? 'Entradas' : 'Vendas'}</p>
+          <p>Total de registros: {items.length}</p>
+        </div>
+      </div>
+
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-4 no-print">
+        <div>
+          <h1 className="text-3xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D]">
             Histórico de Movimentações
           </h1>
-          <p className="text-[#2D2D2D]/60">
-            {filteredMovements.length} movimentação(ões) encontrada(s)
+          <p className="text-[#2D2D2D]/60 text-sm mt-1">
+            {items.length} registro{items.length !== 1 ? 's' : ''} encontrado{items.length !== 1 ? 's' : ''}
           </p>
         </div>
+
         {user?.role === 'adm' && (
           <div className="flex gap-2">
             <button
-              onClick={() => handleExport('pdf')}
-              className="flex items-center gap-2 px-4 py-2 bg-[#111111] text-white rounded-xl font-medium hover:bg-[#111111]/90 transition-colors"
+              onClick={() => exportHistoricoToExcel(items)}
+              disabled={items.length === 0}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium bg-green-600 text-white hover:bg-green-700 disabled:opacity-40 transition-colors"
             >
-              <Download className="w-5 h-5" />
-              PDF
+              <FileSpreadsheet size={16} /> Excel
             </button>
             <button
-              onClick={() => handleExport('excel')}
-              className="flex items-center gap-2 px-4 py-2 bg-[#22C55E] text-white rounded-xl font-medium hover:bg-[#22C55E]/90 transition-colors"
+              onClick={exportHistoricoToPDF}
+              disabled={items.length === 0}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium bg-[#F97316] text-white hover:bg-orange-600 disabled:opacity-40 transition-colors"
             >
-              <Download className="w-5 h-5" />
-              Excel
+              <FileText size={16} /> PDF
             </button>
           </div>
         )}
       </div>
 
-      {/* Filters */}
-      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-        <div className="flex items-center gap-2 mb-4">
-          <Filter className="w-5 h-5 text-[#2D2D2D]/60" />
-          <h2 className="text-lg font-['Barlow_Condensed'] font-bold text-[#2D2D2D]">Filtros</h2>
+      {/* Filtros */}
+      <div className="bg-white rounded-2xl p-5 border border-gray-100 space-y-4 no-print">
+        {/* Chips de tipo */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <button onClick={() => setTipo('todos')} className={chip(tipo === 'todos')}>
+            Todos
+          </button>
+          <button onClick={() => setTipo('entrada')} className={chip(tipo === 'entrada')}>
+            <ArrowDown size={13} /> Entrada
+          </button>
+          <button onClick={() => setTipo('venda')} className={chip(tipo === 'venda')}>
+            <ShoppingCart size={13} /> Venda
+          </button>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-[#2D2D2D]/60 text-sm mb-2">Tipo de Movimentação</label>
-            <select
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
-              className="w-full h-12 px-4 bg-[#F5F5F5] border-2 border-transparent rounded-xl focus:outline-none focus:border-[#F97316] transition-colors"
+
+        {/* Datas e busca */}
+        <div className="flex flex-wrap gap-3 items-center">
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-gray-500 whitespace-nowrap">De</label>
+            <input
+              type="date"
+              value={dataInicio}
+              onChange={e => setDataInicio(e.target.value)}
+              className={inputCls}
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-gray-500 whitespace-nowrap">Até</label>
+            <input
+              type="date"
+              value={dataFim}
+              onChange={e => setDataFim(e.target.value)}
+              className={inputCls}
+            />
+          </div>
+          <div className="flex items-center gap-2 flex-1 min-w-[180px]">
+            <Filter size={14} className="text-gray-400 flex-shrink-0" />
+            <input
+              type="text"
+              placeholder="Buscar produto..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className={`${inputCls} w-full`}
+            />
+          </div>
+          {(search || dataInicio || dataFim) && (
+            <button
+              onClick={() => { setSearch(''); setDataInicio(''); setDataFim('') }}
+              className="text-xs text-gray-400 hover:text-gray-600 underline"
             >
-              <option value="">Todas</option>
-              <option value="entrada">Entradas</option>
-              <option value="saida">Saídas</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-[#2D2D2D]/60 text-sm mb-2">Data Inicial</label>
-            <input
-              type="date"
-              className="w-full h-12 px-4 bg-[#F5F5F5] border-2 border-transparent rounded-xl focus:outline-none focus:border-[#F97316] transition-colors"
-            />
-          </div>
-          <div>
-            <label className="block text-[#2D2D2D]/60 text-sm mb-2">Data Final</label>
-            <input
-              type="date"
-              defaultValue={new Date().toISOString().split('T')[0]}
-              className="w-full h-12 px-4 bg-[#F5F5F5] border-2 border-transparent rounded-xl focus:outline-none focus:border-[#F97316] transition-colors"
-            />
-          </div>
+              Limpar
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Desktop Table */}
-      <div className="hidden lg:block bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      {/* Tabela desktop */}
+      <div className="hidden lg:block bg-white rounded-2xl border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="bg-[#111111] text-white">
-                <th className="px-6 py-4 text-left font-medium">Data</th>
-                <th className="px-6 py-4 text-left font-medium">Produto</th>
-                <th className="px-6 py-4 text-center font-medium">Tipo</th>
-                <th className="px-6 py-4 text-center font-medium">Quantidade</th>
-                <th className="px-6 py-4 text-left font-medium">Responsável</th>
-                <th className="px-6 py-4 text-left font-medium">Observação</th>
+                <th className="px-4 py-3 text-left text-sm font-medium">Data/Hora</th>
+                <th className="px-4 py-3 text-left text-sm font-medium">Produto / Descrição</th>
+                <th className="px-4 py-3 text-left text-sm font-medium">Tipo</th>
+                <th className="px-4 py-3 text-left text-sm font-medium">Qtd</th>
+                <th className="px-4 py-3 text-left text-sm font-medium">Valor</th>
+                <th className="px-4 py-3 text-left text-sm font-medium">Operador</th>
+                <th className="px-4 py-3 text-center text-sm font-medium no-print">Ação</th>
               </tr>
             </thead>
             <tbody>
-              {filteredMovements.map((movement, index) => (
-                <tr
-                  key={movement.id}
-                  className={`${
-                    index % 2 === 0 ? 'bg-white' : 'bg-[#F9F9F9]'
-                  } hover:bg-[#F5F5F5] transition-colors`}
-                >
-                  <td className="px-6 py-4 text-[#2D2D2D]/60">
-                    {format(new Date(movement.created_at), "dd/MM/yyyy 'às' HH:mm", {
-                      locale: ptBR,
-                    })}
+              {items.map((item, index) => (
+                <tr key={index} className="hover:bg-gray-50 border-b border-gray-100 transition-colors">
+
+                  {/* Data */}
+                  <td className="py-3 px-4 text-xs text-gray-500 whitespace-nowrap">
+                    {formatDate(item.data.created_at)}
                   </td>
-                  <td className="px-6 py-4 font-medium text-[#2D2D2D]">
-                    {movement.product.name}
+
+                  {/* Produto / Descrição */}
+                  <td className="py-3 px-4 max-w-[220px]">
+                    {item.kind === 'entrada' ? (
+                      <>
+                        <p className="text-sm text-gray-800 truncate">{item.data.product?.name}</p>
+                        {item.data.notes && (
+                          <p className="text-xs text-gray-400 truncate">{item.data.notes}</p>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-sm text-gray-800 truncate">
+                          {buildSaleDescription(item.data)}
+                        </p>
+                        {item.data.services && item.data.services.length > 0 && (
+                          <p className="text-xs text-gray-400 truncate">
+                            + {item.data.services.map(s => s.service?.name).join(', ')}
+                          </p>
+                        )}
+                      </>
+                    )}
                   </td>
-                  <td className="px-6 py-4 text-center">
-                    <span
-                      className={`inline-flex items-center gap-1 px-3 py-1 rounded-lg font-medium ${
-                        movement.type === 'entrada'
-                          ? 'bg-[#22C55E]/10 text-[#22C55E]'
-                          : 'bg-[#F97316]/10 text-[#F97316]'
-                      }`}
+
+                  {/* Tipo */}
+                  <td className="py-3 px-4">
+                    {item.kind === 'entrada' ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        <ArrowDown size={10} /> Entrada
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                        <ShoppingCart size={10} /> Venda
+                      </span>
+                    )}
+                  </td>
+
+                  {/* Quantidade */}
+                  <td className="py-3 px-4 text-sm text-gray-700">
+                    {item.kind === 'entrada'
+                      ? `${item.data.quantity} un`
+                      : `${item.data.items?.reduce((s, i) => s + i.quantity, 0) ?? 0} un`}
+                  </td>
+
+                  {/* Valor */}
+                  <td className="py-3 px-4">
+                    {item.kind === 'entrada' ? (
+                      <span className="text-xs text-gray-400">—</span>
+                    ) : (
+                      <div>
+                        <p className="text-sm font-medium text-gray-800">
+                          {formatMoney(item.data.total)}
+                        </p>
+                        {item.data.payment_method === 'fiado' && (
+                          <p className="text-xs text-yellow-600">fiado</p>
+                        )}
+                      </div>
+                    )}
+                  </td>
+
+                  {/* Operador */}
+                  <td className="py-3 px-4 text-sm text-gray-700">
+                    {item.data.user?.name ?? '—'}
+                  </td>
+
+                  {/* Ação */}
+                  <td className="py-3 px-4 text-center no-print">
+                    <button
+                      onClick={() => setItemSelecionado(item)}
+                      className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-400 hover:bg-[#F97316] hover:text-white hover:border-[#F97316] transition-colors mx-auto"
+                      title="Ver detalhes"
                     >
-                      {movement.type === 'entrada' ? (
-                        <TrendingDown className="w-4 h-4" />
-                      ) : (
-                        <TrendingUp className="w-4 h-4" />
-                      )}
-                      {movement.type.toUpperCase()}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    <span
-                      className={`text-lg font-['Barlow_Condensed'] font-bold ${
-                        movement.type === 'entrada' ? 'text-[#22C55E]' : 'text-[#F97316]'
-                      }`}
-                    >
-                      {movement.type === 'entrada' ? '+' : '-'}
-                      {movement.quantity}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-[#2D2D2D]">{movement.user.name}</td>
-                  <td className="px-6 py-4 text-[#2D2D2D]/60 text-sm">
-                    {movement.notes || '-'}
+                      <Eye size={14} />
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -178,71 +295,69 @@ export function Historico() {
         </div>
       </div>
 
-      {/* Mobile Cards */}
-      <div className="lg:hidden space-y-4">
-        {filteredMovements.map((movement) => (
-          <div key={movement.id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-            <div className="flex items-start justify-between mb-3">
-              <div className="flex-1 min-w-0">
-                <p className="font-medium text-[#2D2D2D] mb-1">{movement.product.name}</p>
-                <p className="text-xs text-[#2D2D2D]/60">
-                  {format(new Date(movement.created_at), "dd/MM/yyyy 'às' HH:mm", {
-                    locale: ptBR,
-                  })}
+      {/* Cards mobile */}
+      <div className="lg:hidden space-y-3">
+        {items.map((item, index) => (
+          <div key={index} className="bg-white rounded-2xl p-4 border border-gray-100">
+            <div className="flex items-start justify-between mb-2">
+              <div className="flex-1 min-w-0 mr-2">
+                <p className="text-sm font-medium text-gray-800 truncate">
+                  {item.kind === 'entrada'
+                    ? item.data.product?.name
+                    : buildSaleDescription(item.data)}
                 </p>
+                <p className="text-xs text-gray-400 mt-0.5">{formatDate(item.data.created_at)}</p>
               </div>
-              <span
-                className={`inline-flex items-center gap-1 px-3 py-1 rounded-lg font-medium text-sm ${
-                  movement.type === 'entrada'
-                    ? 'bg-[#22C55E]/10 text-[#22C55E]'
-                    : 'bg-[#F97316]/10 text-[#F97316]'
-                }`}
-              >
-                {movement.type === 'entrada' ? (
-                  <TrendingDown className="w-4 h-4" />
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {item.kind === 'entrada' ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                    <ArrowDown size={10} /> Entrada
+                  </span>
                 ) : (
-                  <TrendingUp className="w-4 h-4" />
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                    <ShoppingCart size={10} /> Venda
+                  </span>
                 )}
-                {movement.type.toUpperCase()}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 p-3 bg-[#F5F5F5] rounded-xl mb-3">
-              <div>
-                <p className="text-xs text-[#2D2D2D]/60 mb-1">Quantidade</p>
-                <p
-                  className={`text-xl font-['Barlow_Condensed'] font-bold ${
-                    movement.type === 'entrada' ? 'text-[#22C55E]' : 'text-[#F97316]'
-                  }`}
+                <button
+                  onClick={() => setItemSelecionado(item)}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-400 hover:bg-[#F97316] hover:text-white hover:border-[#F97316] transition-colors"
                 >
-                  {movement.type === 'entrada' ? '+' : '-'}
-                  {movement.quantity}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-[#2D2D2D]/60 mb-1">Responsável</p>
-                <p className="text-sm font-medium text-[#2D2D2D]">{movement.user.name}</p>
+                  <Eye size={14} />
+                </button>
               </div>
             </div>
-
-            {movement.notes && (
-              <p className="text-sm text-[#2D2D2D]/60">{movement.notes}</p>
-            )}
+            <div className="flex justify-between text-xs text-gray-500">
+              <span>
+                {item.kind === 'entrada'
+                  ? `${item.data.quantity} unidades`
+                  : formatMoney(item.data.total)}
+              </span>
+              <span>{item.data.user?.name ?? '—'}</span>
+            </div>
           </div>
         ))}
       </div>
 
-      {filteredMovements.length === 0 && (
-        <div className="bg-white rounded-2xl p-12 shadow-sm border border-gray-100 text-center">
-          <div className="w-20 h-20 bg-[#F5F5F5] rounded-full flex items-center justify-center mx-auto mb-4">
-            <Filter className="w-10 h-10 text-[#2D2D2D]/40" />
+      {/* Estado vazio */}
+      {items.length === 0 && !isLoading && (
+        <div className="bg-white rounded-2xl p-12 border border-gray-100 text-center">
+          <div className="w-16 h-16 bg-[#F5F5F5] rounded-full flex items-center justify-center mx-auto mb-4">
+            <Filter className="w-8 h-8 text-gray-300" />
           </div>
-          <h3 className="text-xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D] mb-2">
-            Nenhuma movimentação encontrada
+          <h3 className="text-xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D] mb-1">
+            Nenhum registro encontrado
           </h3>
-          <p className="text-[#2D2D2D]/60">Tente ajustar os filtros de busca</p>
+          <p className="text-sm text-[#2D2D2D]/60">Tente ajustar os filtros de busca</p>
         </div>
       )}
+
+      {/* Modal de detalhes */}
+      {itemSelecionado && (
+        <HistoricoDetalheModal
+          item={itemSelecionado}
+          onClose={() => setItemSelecionado(null)}
+        />
+      )}
     </div>
-  );
+  )
 }

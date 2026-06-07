@@ -71,7 +71,8 @@ frontend/
     │   ├── queryClient.ts      # QueryClient (staleTime 5min, retry 1)
     │   ├── errors.ts           # extractValidationErrors, getFirstError, getErrorMessage
     │   ├── barcode.ts          # generateBarcodeSVG via jsbarcode
-    │   └── export.ts           # exportHistoricoToExcel(), exportSaleToExcel(), exportHistoricoToPDF()
+    │   ├── export.ts           # exportHistoricoToExcel(), exportSaleToExcel(), exportHistoricoToPDF()
+    │   └── saleStatus.ts       # saleStatusLabel(status, paymentMethod) — fonte única do label de status de venda
     ├── services/
     │   ├── auth.service.ts     # login (→ data.user), logout, me (→ data.data)
     │   ├── product.service.ts  # parseProduct(), getNextBarcode() — normaliza decimais para Number
@@ -116,11 +117,11 @@ frontend/
         │   │   └── ProductFormModal.tsx  # modal único criar/editar produto + scanner + barcode preview
         │   │   └── (view inline em Estoque.tsx)  # modal somente-leitura com detalhes do produto
         │   ├── Historico/
-        │   │   └── HistoricoDetalheModal.tsx  # modal detalhe entrada/venda; exporta tipo HistoricoItem
+        │   │   └── HistoricoDetalheModal.tsx  # modal detalhe entrada/venda; botão "Marcar como pago" (só fiado pendente); exporta tipo HistoricoItem
         │   └── ui/                     # shadcn/ui — não editar diretamente
         └── pages/
             ├── Login.tsx           # navega via useEffect após isAuthenticated=true
-            ├── Dashboard.tsx       # 5 cards clicáveis, gráfico c/ Serviços, atividades unificadas (movements + sales)
+            ├── Dashboard.tsx       # 5 cards clicáveis, gráfico 7 dias (dados do backend, BRT-aware), atividades unificadas (movements + sales)
             ├── Estoque.tsx         # CRUD completo: visualizar, cadastro, edição, exclusão (ADM), etiqueta
             ├── Entrada.tsx         # usa useCreateMovement(), BarcodeScanner integrado
             ├── Saida.tsx           # usa useCreateSale(), BarcodeScanner integrado
@@ -196,9 +197,9 @@ backend/
 │       ├── AuthService.php      # login por username + check active
 │       ├── ProductService.php   # store() gera barcode automaticamente se vier vazio
 │       ├── MovementService.php  # lockForUpdate() + DB::transaction
-│       ├── SaleService.php      # reutiliza MovementService para baixa de estoque
+│       ├── SaleService.php      # reutiliza MovementService para baixa de estoque; à vista → PAGO+paid_at; fiado → PENDENTE
 │       ├── UserService.php
-│       └── DashboardService.php  # services_today via SaleService; sales_today usa whereHas('items') — exclui vendas só de serviço
+│       └── DashboardService.php  # BRT-aware (Carbon whereBetween); gráfico 7 dias agregado no backend; sales_today usa whereHas('items')
 ├── database/
 │   ├── migrations/              # 13 migrations (+ barcode_sequences + add_price_cost_to_services)
 │   └── seeders/
@@ -209,7 +210,8 @@ backend/
 ├── routes/
 │   └── api.php                  # 33 rotas registradas
 ├── config/
-│   └── cors.php                 # supports_credentials: true, allowed_origins: FRONTEND_URL
+│   ├── app.php                  # business_timezone: env('APP_BUSINESS_TIMEZONE', 'America/Sao_Paulo') — fuso único para queries BRT
+│   └── cors.php                 # supports_credentials: true, allowed_origins: FRONTEND_URL + allowed_origins_patterns: subnet 192.168.1.x:5173
 └── bootstrap/
     └── app.php                  # statefulApi() + alias 'role'
 ```
@@ -296,14 +298,19 @@ Request → Route → Middleware (auth:sanctum, role)
 
 - **Estoque:** `MovementService` usa `lockForUpdate()` + `DB::transaction` — sem race condition
 - **Venda:** `SaleService::store` reutiliza `MovementService` para dar baixa por item
+- **Status inicial da venda:** `SaleService::store` — `payment_method=fiado` → `status=PENDENTE, paid_at=null`; qualquer outro método (à vista) → `status=PAGO, paid_at=now()`
+- **Quitar fiado:** `PATCH /api/sales/{sale}/status` com `{ status: 'pago' }` → `SaleService::updateStatus` seta `paid_at=now()`. Policy: ADM pode qualquer venda; operador só as próprias
 - **Estoque insuficiente:** lança `InsufficientStockException` → resposta 422 automática
 - **Movimentação imutável:** `MovementPolicy` retorna `false` para update/delete
 - **Usuário desativado:** `AuthService` verifica `active = true` no login
 - **Barcode interno:** `BarcodeSequence::generateNext()` usa `lockForUpdate()` — sem duplicatas; `peekNext()` só lê (preview sem reservar)
+- **Dashboard timezone:** queries usam `Carbon::now('America/Sao_Paulo')->startOfDay()->setTimezone('UTC')` — fuso centralizado em `config('app.business_timezone')`; NÃO alterar `app.timezone` (armazenamento UTC)
+- **Dashboard gráfico:** 7 dias agregados no backend (`DashboardService::getWeeklyChart`) — evita truncamento por paginação da API
 - **Dashboard `sales_today`:** usa `whereHas('items')` — conta apenas vendas com produtos; venda exclusiva de serviço não entra neste contador
 - **Dashboard `services_today`:** soma `SaleService::whereDate('created_at')->sum('quantity')` — conta todos os serviços executados independente da venda ter produtos
-- **FinanceController:** conta todas as vendas não-canceladas (PAGO + PENDENTE) para receita/custo/lucro — `SaleService::store` sempre cria com PENDENTE, então filtrar só PAGO zeraria os dados. Retorna `service_cost` (soma de `Service.price_cost * quantity` dos serviços vendidos). Fórmula: `profit = revenue - cost - service_cost`
+- **FinanceController:** conta todas as vendas não-canceladas (PAGO + PENDENTE) para receita/custo/lucro. Retorna `service_cost` (soma de `Service.price_cost * quantity`). Fórmula: `profit = revenue - cost - service_cost`
 - **Fiado alert:** `fiado_count/fiado_total` buscados globalmente (sem filtro de período) — vendas com `payment_method=fiado` e `status=pendente`
+- **Label de status:** `saleStatusLabel(status, paymentMethod)` em `src/lib/saleStatus.ts` — fonte única: `cancelado→'cancelado'`, `pago→'pago'`, `pendente+fiado→'fiado'`, `pendente+outro→'pendente'`
 - **Histórico unificado:** `HistoricoItem` une movimentos de entrada + vendas; saídas de estoque não aparecem (são redundantes com as vendas)
 
 ---
@@ -463,6 +470,18 @@ php artisan config:cache
 php artisan route:cache
 ```
 
+### Acesso em rede LAN (celular / outros PCs)
+
+O frontend já ouve em `0.0.0.0:5173` (vite.config.ts). Para que outros dispositivos na mesma rede consigam autenticar, o `.env` do backend precisa de:
+
+```ini
+SESSION_DOMAIN=                          # vazio — cookie aplica ao host que respondeu
+SANCTUM_STATEFUL_DOMAINS=localhost:5173,localhost:3000,<IP_DO_SERVIDOR>:5173
+```
+
+O `cors.php` já aceita qualquer IP no subnet `192.168.1.x:5173` via `allowed_origins_patterns`.
+Após editar o `.env`, execute `php artisan config:clear` e reinicie o servidor.
+
 ---
 
 ## Deploy — Laragon + NSSM
@@ -503,4 +522,10 @@ NSSM 2.24 (x64) em `installer/tools/nssm.exe`.
 | Histórico: lista unificada entradas+vendas, filtros, modal detalhe, export Excel/PDF | ✅ Concluído |
 | Finanças: 4 cards (Receita, Custo Produtos, Custo Serviços, Lucro); `price_cost` em Service | ✅ Concluído |
 | Finanças: bug `STATUS_LABEL` — `pendente` exibia "fiado" incorretamente | ✅ Corrigido |
+| Dashboard: bug de timezone — queries usavam UTC em vez de BRT (whereBetween + Carbon) | ✅ Corrigido |
+| Dashboard: gráfico 7 dias agregado no backend (evita truncamento por paginação) | ✅ Corrigido |
+| Histórico + Finanças: `saleStatusLabel` unificada em `src/lib/saleStatus.ts` | ✅ Concluído |
+| Vendas à vista (pix/dinheiro/cartão) nascem com `status=pago` e `paid_at` preenchido | ✅ Concluído |
+| Histórico: botão "Marcar como pago" no modal para quitar fiado pendente | ✅ Concluído |
+| Acesso LAN: SESSION_DOMAIN vazio + SANCTUM_STATEFUL_DOMAINS + cors subnet 192.168.1.x | ✅ Concluído |
 | Fase 5 — Testes + build de produção + instalador .exe | ⏳ Pendente |

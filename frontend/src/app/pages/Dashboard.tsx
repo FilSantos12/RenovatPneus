@@ -5,7 +5,7 @@ import { useDashboard } from '@/hooks/useDashboard';
 import { useMovements } from '@/hooks/useMovements';
 import { useSales } from '@/hooks/useSales';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { format, subDays } from 'date-fns';
+import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 export function Dashboard() {
@@ -18,38 +18,13 @@ export function Dashboard() {
   const movements = movementsData?.data ?? [];
   const sales = salesData?.data ?? [];
 
-  // Chart data — last 7 days
-  const today = new Date();
-  const chartData = Array.from({ length: 7 }, (_, i) => {
-    const date = subDays(today, 6 - i);
-    const dateStr = format(date, 'yyyy-MM-dd');
-
-    const dayMovements = movements.filter(
-      (m) => format(new Date(m.created_at), 'yyyy-MM-dd') === dateStr
-    );
-
-    const entries = dayMovements
-      .filter((m) => m.type === 'entrada')
-      .reduce((sum, m) => sum + m.quantity, 0);
-
-    const exits = dayMovements
-      .filter((m) => m.type === 'saida')
-      .reduce((sum, m) => sum + m.quantity, 0);
-
-    const servicos = sales
-      .filter((s) => format(new Date(s.created_at), 'yyyy-MM-dd') === dateStr)
-      .reduce(
-        (sum, s) => sum + s.services.reduce((sv, item) => sv + item.quantity, 0),
-        0
-      );
-
-    return {
-      date: format(date, 'EEE', { locale: ptBR }),
-      Entradas: entries,
-      Vendas: exits,
-      Serviços: servicos,
-    };
-  });
+  // Chart data — built from backend-aggregated series (avoids pagination truncation and uses BRT timezone)
+  const chartData = (summary?.chart?.last_7_days ?? []).map((day) => ({
+    date: format(new Date(day.date + 'T00:00:00'), 'EEE', { locale: ptBR }),
+    Entradas: day.entries,
+    Vendas: day.exits,
+    Serviços: day.services,
+  }));
 
   // Unified activity feed — movements + service sales merged by date
   type ActivityItem = {
@@ -253,7 +228,7 @@ export function Dashboard() {
           Movimentações — Últimos 7 dias
         </h2>
         <div className="h-64">
-          {loadingMovements || loadingSales ? (
+          {loadingSummary ? (
             <div className="flex items-center justify-center h-full">
               <Loader2 className="w-6 h-6 animate-spin text-[#F97316]" />
             </div>
