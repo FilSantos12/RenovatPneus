@@ -8,10 +8,13 @@ interface UseBarcodeScanOptions {
   enabled?: boolean
 }
 
+const SCANNER_SPEED_THRESHOLD_MS = 50
+
 export function useBarcodeScan({ mode, onScan, enabled = true }: UseBarcodeScanOptions) {
   const inputRef = useRef<HTMLInputElement>(null)
   const bufferRef = useRef('')
   const timerRef = useRef<ReturnType<typeof setTimeout>>()
+  const lastKeyTimeRef = useRef(0)
 
   useEffect(() => {
     if (mode !== 'usb' || !enabled) return
@@ -22,6 +25,10 @@ export function useBarcodeScan({ mode, onScan, enabled = true }: UseBarcodeScanO
     input.focus()
 
     function handleKeyDown(e: KeyboardEvent) {
+      const now = Date.now()
+      const timeSinceLast = now - lastKeyTimeRef.current
+      lastKeyTimeRef.current = now
+
       if (e.key === 'Enter') {
         const code = bufferRef.current.trim()
         if (code.length > 0) {
@@ -32,11 +39,15 @@ export function useBarcodeScan({ mode, onScan, enabled = true }: UseBarcodeScanO
       }
 
       if (e.key.length === 1) {
-        bufferRef.current += e.key
-        clearTimeout(timerRef.current)
-        timerRef.current = setTimeout(() => {
-          bufferRef.current = ''
-        }, 100)
+        // Acumula apenas se a tecla chegou rápido (leitor USB) ou buffer já iniciado
+        const isScannerInput = timeSinceLast < SCANNER_SPEED_THRESHOLD_MS || bufferRef.current.length > 0
+        if (isScannerInput) {
+          bufferRef.current += e.key
+          clearTimeout(timerRef.current)
+          timerRef.current = setTimeout(() => {
+            bufferRef.current = ''
+          }, 100)
+        }
       }
     }
 

@@ -15,7 +15,6 @@ class StoreProductRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
-            'barcode' => ['nullable', 'string', 'unique:products,barcode'],
             'description' => ['nullable', 'string'],
             'brand' => ['nullable', 'string', 'max:100'],
             'size' => ['nullable', 'string', 'max:50'],
@@ -31,8 +30,6 @@ class StoreProductRequest extends FormRequest
     {
         return [
             'name.required' => 'O nome do produto é obrigatório.',
-            'barcode.required' => 'O código de barras é obrigatório.',
-            'barcode.unique' => 'Este código de barras já está cadastrado.',
             'price_cost.required' => 'O preço de custo é obrigatório.',
             'price_cost.min' => 'O preço de custo não pode ser negativo.',
             'price_sale.required' => 'O preço de venda é obrigatório.',

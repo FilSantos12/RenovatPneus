@@ -12,7 +12,7 @@ export interface User {
 export interface Product {
   id: number
   name: string
-  barcode?: string
+  barcode: string
   description?: string
   brand: string
   size: string

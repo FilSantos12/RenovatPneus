@@ -1,7 +1,8 @@
-import { useState, useRef } from 'react';
-import { Camera, Plus, Minus, Check, Keyboard, AlertCircle, Loader2 } from 'lucide-react';
+import { useState } from 'react';
+import { ScanLine, Plus, Minus, Check, AlertCircle, Loader2 } from 'lucide-react';
 import { useProducts } from '@/hooks/useProducts';
 import { useCreateMovement } from '@/hooks/useMovements';
+import { BarcodeScanner } from '../components/BarcodeScanner/BarcodeScanner';
 import type { Product } from '../types';
 import { toast } from 'sonner';
 import { motion } from 'motion/react';
@@ -9,62 +10,27 @@ import { motion } from 'motion/react';
 type MovementType = 'entrada' | 'saida'
 
 export function Scanner() {
-  const [scanning, setScanning] = useState(false);
   const [scannedProduct, setScannedProduct] = useState<Product | null>(null);
   const [showMovementType, setShowMovementType] = useState(false);
   const [movementType, setMovementType] = useState<MovementType | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [notes, setNotes] = useState('');
-  const [manualCode, setManualCode] = useState('');
-  const [showManualInput, setShowManualInput] = useState(false);
-
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const [scannerOpen, setScannerOpen] = useState(false);
 
   const { data: productsData } = useProducts();
   const products: Product[] = productsData?.data ?? [];
   const createMovement = useCreateMovement();
 
-  const startScanning = async () => {
-    try {
-      setScanning(true);
-      setTimeout(() => {
-        const randomProduct = products[Math.floor(Math.random() * products.length)];
-        if (randomProduct?.barcode) {
-          handleProductScanned(randomProduct.barcode);
-        } else {
-          toast.error('Nenhum produto com código de barras encontrado');
-          setScanning(false);
-        }
-      }, 2000);
-    } catch {
-      toast.error('Não foi possível acessar a câmera');
-      setScanning(false);
-    }
-  };
-
   const handleProductScanned = (code: string) => {
     const product = products.find((p) => p.barcode === code);
-
     if (product) {
       setScannedProduct(product);
       setShowMovementType(true);
-      setScanning(false);
+      setScannerOpen(false);
       toast.success('Produto encontrado!');
-      if ('vibrate' in navigator) navigator.vibrate(200);
     } else {
-      toast.error('Produto não encontrado');
-      setScanning(false);
+      toast.error(`Produto não encontrado: ${code}`);
     }
-  };
-
-  const handleManualSearch = () => {
-    if (!manualCode) {
-      toast.error('Digite um código');
-      return;
-    }
-    handleProductScanned(manualCode);
-    setShowManualInput(false);
-    setManualCode('');
   };
 
   const handleMovementTypeSelect = (type: MovementType) => {
@@ -90,7 +56,6 @@ export function Scanner() {
     setMovementType(null);
     setQuantity(1);
     setNotes('');
-    setScanning(false);
     setShowMovementType(false);
   };
 
@@ -101,66 +66,31 @@ export function Scanner() {
           Leitor de Código de Barras
         </h1>
         <p className="text-[#2D2D2D]/60">
-          Aponte a câmera para o código de barras do produto
+          Escaneie o código de barras do produto para registrar uma movimentação
         </p>
       </div>
 
-      {!scannedProduct && !scanning && (
+      {!scannedProduct && (
         <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
           <div className="max-w-2xl mx-auto text-center">
             <div className="w-32 h-32 bg-[#F97316]/10 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Camera className="w-16 h-16 text-[#F97316]" />
+              <ScanLine className="w-16 h-16 text-[#F97316]" />
             </div>
             <h2 className="text-2xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D] mb-4">
               Pronto para escanear
             </h2>
             <p className="text-[#2D2D2D]/60 mb-8">
-              Posicione o código de barras dentro da área de leitura quando a câmera abrir
+              Use a câmera (mobile) ou o leitor USB (desktop) para identificar o pneu
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <button
-                onClick={startScanning}
-                className="flex items-center justify-center gap-3 px-8 py-4 bg-[#F97316] text-white rounded-xl font-medium text-lg hover:bg-[#F97316]/90 transition-colors"
-              >
-                <Camera className="w-6 h-6" />
-                Iniciar Escaneamento
-              </button>
-              <button
-                onClick={() => setShowManualInput(true)}
-                className="flex items-center justify-center gap-3 px-8 py-4 bg-[#111111] text-white rounded-xl font-medium text-lg hover:bg-[#111111]/90 transition-colors"
-              >
-                <Keyboard className="w-6 h-6" />
-                Digitar Código
-              </button>
-            </div>
+            <button
+              onClick={() => setScannerOpen(true)}
+              className="flex items-center justify-center gap-3 px-8 py-4 bg-[#F97316] text-white rounded-xl font-medium text-lg hover:bg-[#F97316]/90 transition-colors mx-auto"
+            >
+              <ScanLine className="w-6 h-6" />
+              Escanear Código
+            </button>
           </div>
         </div>
-      )}
-
-      {scanning && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="bg-[#111111] rounded-2xl p-8 shadow-sm aspect-video max-w-2xl mx-auto relative overflow-hidden"
-        >
-          <video ref={videoRef} className="w-full h-full object-cover rounded-lg" />
-          <motion.div
-            className="absolute left-1/2 w-3/4 h-1 bg-[#F97316] shadow-lg shadow-[#F97316]/50"
-            style={{ transform: 'translateX(-50%)' }}
-            animate={{ top: ['10%', '90%'] }}
-            transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
-          />
-          <div className="absolute inset-8 border-4 border-[#F97316] rounded-lg pointer-events-none">
-            <div className="absolute top-0 left-0 w-12 h-12 border-t-4 border-l-4 border-[#F97316]" />
-            <div className="absolute top-0 right-0 w-12 h-12 border-t-4 border-r-4 border-[#F97316]" />
-            <div className="absolute bottom-0 left-0 w-12 h-12 border-b-4 border-l-4 border-[#F97316]" />
-            <div className="absolute bottom-0 right-0 w-12 h-12 border-b-4 border-r-4 border-[#F97316]" />
-          </div>
-          <div className="absolute bottom-8 left-1/2 -translate-x-1/2 text-white text-center">
-            <p className="text-lg font-medium">Escaneando...</p>
-            <p className="text-sm text-white/60 mt-1">Posicione o código de barras na área destacada</p>
-          </div>
-        </motion.div>
       )}
 
       {showMovementType && scannedProduct && (
@@ -309,41 +239,11 @@ export function Scanner() {
         </motion.div>
       )}
 
-      {showManualInput && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <motion.div
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="bg-white rounded-2xl p-6 max-w-md w-full"
-          >
-            <h3 className="text-xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D] mb-4">
-              Digitar Código Manualmente
-            </h3>
-            <input
-              type="text"
-              value={manualCode}
-              onChange={(e) => setManualCode(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleManualSearch()}
-              placeholder="Digite o código de barras"
-              className="w-full h-14 px-4 bg-[#F5F5F5] border-2 border-transparent rounded-xl focus:outline-none focus:border-[#F97316] transition-colors mb-4"
-              autoFocus
-            />
-            <div className="flex gap-3">
-              <button
-                onClick={() => { setShowManualInput(false); setManualCode(''); }}
-                className="flex-1 py-3 bg-[#F5F5F5] text-[#2D2D2D] rounded-xl font-medium hover:bg-gray-200 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleManualSearch}
-                className="flex-1 py-3 bg-[#F97316] text-white rounded-xl font-medium hover:bg-[#F97316]/90 transition-colors"
-              >
-                Buscar
-              </button>
-            </div>
-          </motion.div>
-        </div>
+      {scannerOpen && (
+        <BarcodeScanner
+          onScan={handleProductScanned}
+          onClose={() => setScannerOpen(false)}
+        />
       )}
     </div>
   );

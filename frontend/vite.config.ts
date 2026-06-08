@@ -2,6 +2,9 @@ import { defineConfig } from 'vite'
 import path from 'path'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
+// No primeiro acesso pelo celular, aceitar o aviso de certificado não confiável
+// (clicar em 'Avançado' → 'Continuar'). Necessário para getUserMedia funcionar em IP local.
+import basicSsl from '@vitejs/plugin-basic-ssl'
 
 function figmaAssetResolver() {
   return {
@@ -20,6 +23,7 @@ export default defineConfig({
     figmaAssetResolver(),
     react(),
     tailwindcss(),
+    basicSsl(),
   ],
   resolve: {
     alias: {
