@@ -222,14 +222,14 @@ backend/
 
 ```typescript
 // Roles e enums — sempre lowercase, como o backend retorna
-type UserRole    = 'adm' | 'operador'
+type UserRole     = 'adm' | 'operador'
 type MovementType = 'entrada' | 'saida'
 type SaleStatus  = 'pendente' | 'pago' | 'cancelado'
 type PaymentMethod = 'dinheiro' | 'cartao_credito' | 'cartao_debito' | 'pix' | 'fiado'
 
 // Campos de produto
 Product.name        // nome de exibição (não "description")
-Product.barcode     // código de barras (não "code")
+Product.barcode     // código de barras obrigatório (string, não opcional)
 Product.min_stock   // estoque mínimo (não "minQuantity")
 Product.price_sale  // preço de venda
 Product.price_cost  // preço de custo (opcional)
@@ -255,7 +255,7 @@ Sale.created_at         // não "date"
 
 **Login:** `AuthController::login` retorna `{ user: {...}, message: "..." }` — o service usa `data.user`. Os demais endpoints usam o padrão `{ data: {...} }` do `JsonResource` — usam `data.data`.
 
-**ProductPayload** (product.service.ts): inclui `quantity?: number` para quantidade inicial no cadastro. O campo `barcode` é opcional no payload — se omitido, o backend gera automaticamente via `BarcodeSequence::generateNext()`.
+**ProductPayload** (product.service.ts): inclui `quantity?: number` para quantidade inicial no cadastro. O campo `barcode` **não é enviado no payload de criação** — o backend sempre gera via `BarcodeSequence::generateNext()`. `StoreProductRequest` não aceita o campo `barcode`. O modal de cadastro exibe o preview somente-leitura via `GET /api/products/next-barcode` (`peekNext()`), e após salvar exibe o código real gerado com botão "Imprimir etiqueta".
 
 ---
 
@@ -379,19 +379,37 @@ Usa **`createBrowserRouter`**. O Vite dev server serve o `index.html` para todas
 ## Scanner de código de barras
 
 ### Modo USB/HID (leitor físico)
-O hook `useBarcodeScan` captura teclado com buffer + timeout de 100ms. Leitores HID digitam o código e enviam Enter. Input oculto com `autoFocus` obrigatório.
+O hook `useBarcodeScan` captura teclado com buffer + timeout de 100ms e threshold de velocidade de **50ms** entre teclas — só acumula no buffer se `timeSinceLast < 50ms` ou buffer já iniciado. Isso distingue o leitor USB (muito rápido) de digitação humana. Input oculto com `autoFocus` obrigatório.
 
 ### Modo câmera (react-zxing v3)
 ```typescript
-// API v3 — usa result.rawValue (não result.getText())
+// API v3 — usa result.rawValue; câmera traseira preferida; onError para NotAllowedError/NotFoundError
 const { ref } = useZxing({
   onDecodeResult: (result) => handleScan(result.rawValue),
-  paused: mode !== 'camera',  // economiza bateria quando fechado
+  paused: mode !== 'camera',
+  constraints: { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } },
+  onError: (error) => { /* exibe mensagem + fallback manual */ },
 })
 ```
 
-### Cooldown anti-duplicata
-`lastScanRef` com reset de 2 segundos evita disparo duplo do mesmo código.
+### Distinção de viewport
+`BarcodeScanner` detecta viewport ao montar (`window.innerWidth < 1024`):
+- **Mobile**: modo inicial = câmera; botão Câmera visível (`lg:hidden`); viewfinder + campo manual abaixo
+- **Desktop**: modo inicial = USB; botão USB visível (`hidden lg:flex`); campo texto + instrução
+
+### Cooldown anti-duplicata + feedback
+`lastScanRef` com reset de 2 segundos evita disparo duplo. Pós-leitura: borda do viewfinder fica verde por 1s e `navigator.vibrate?.(200)` dispara.
+
+### HTTPS — acesso LAN (celular)
+`@vitejs/plugin-basic-ssl` em `vite.config.ts` habilita HTTPS no Vite dev server.
+No primeiro acesso pelo celular aceitar o aviso de certificado não confiável (Avançado → Continuar).
+**Variáveis obrigatórias no `.env` do backend para HTTPS funcionar:**
+```ini
+SESSION_SECURE_COOKIE=true
+SANCTUM_STATEFUL_DOMAINS=localhost:5173,localhost:3000,<IP_DO_SERVIDOR>:5173
+FRONTEND_URL=https://localhost:5173
+```
+`cors.php` usa padrão `#^https?://192\.168\.1\.\d+:5173$#` (aceita HTTP e HTTPS).
 
 ---
 
@@ -528,4 +546,9 @@ NSSM 2.24 (x64) em `installer/tools/nssm.exe`.
 | Vendas à vista (pix/dinheiro/cartão) nascem com `status=pago` e `paid_at` preenchido | ✅ Concluído |
 | Histórico: botão "Marcar como pago" no modal para quitar fiado pendente | ✅ Concluído |
 | Acesso LAN: SESSION_DOMAIN vazio + SANCTUM_STATEFUL_DOMAINS + cors subnet 192.168.1.x | ✅ Concluído |
+| HTTPS LAN: @vitejs/plugin-basic-ssl + SESSION_SECURE_COOKIE=true + cors https? | ✅ Concluído |
+| Scanner mobile: câmera traseira, onError, feedback visual/vibração, distinção viewport | ✅ Concluído |
+| Scanner.tsx: substituído mock por BarcodeScanner real | ✅ Concluído |
+| useBarcodeScan: threshold 50ms para distinguir leitor USB de digitação humana | ✅ Concluído |
+| Cadastro produto: barcode somente-leitura, gerado no backend, tela de sucesso pós-criação | ✅ Concluído |
 | Fase 5 — Testes + build de produção + instalador .exe | ⏳ Pendente |
