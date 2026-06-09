@@ -142,6 +142,19 @@ export function MobileDrawer({ open, onClose }: MobileDrawerProps) {
             <LogOut className="w-5 h-5 flex-shrink-0" />
             <span>Sair</span>
           </button>
+          <div className="px-3 pt-3 border-t border-white/10 mt-2">
+            <p className="text-[10px] text-white/30 leading-relaxed text-center">
+              v1.0.0 · Desenvolvido por{' '}
+              <a
+                href="https://filsantos12.github.io/MyPortifolio/index.html#"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-[#F97316] transition-colors"
+              >
+                Filipe Santos
+              </a>
+            </p>
+          </div>
         </div>
       </aside>
     </>
