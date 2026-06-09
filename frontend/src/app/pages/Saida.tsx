@@ -1,12 +1,13 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Search, Plus, Minus, Check, Camera, AlertCircle, X, Loader2 } from 'lucide-react';
 import { useProducts } from '@/hooks/useProducts';
 import { useServices } from '@/hooks/useServices';
 import { useCreateSale } from '@/hooks/useSales';
 import { BarcodeScanner } from '../components/BarcodeScanner/BarcodeScanner';
 import type { Product, Service } from '../types';
-import { extractValidationErrors } from '@/lib/errors';
+import { extractValidationErrors, getFirstError } from '@/lib/errors';
 import { toast } from 'sonner';
+import { productService } from '@/services/product.service';
 
 interface CartItem {
   product: Product;
@@ -27,6 +28,8 @@ export function Saida() {
   const [paymentMethod, setPaymentMethod] = useState('pix');
   const [showResults, setShowResults] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string[]>>({});
 
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [cartServices, setCartServices] = useState<CartService[]>([]);
@@ -34,18 +37,22 @@ export function Saida() {
   const { data: productsData } = useProducts();
   const { data: servicesData } = useServices();
   const createSale = useCreateSale();
+  const confirmRef = useRef<HTMLDivElement>(null);
 
   const products: Product[] = productsData?.data ?? [];
   const services: Service[] = servicesData?.data ?? [];
 
-  function handleScan(barcode: string) {
-    const product = products.find((p) => p.barcode === barcode);
-    if (product) {
+  async function handleScan(barcode: string) {
+    setIsSearching(true);
+    try {
+      const product = await productService.findByBarcode(barcode);
       setSelectedProduct(product);
       setScannerOpen(false);
       toast.success('Produto encontrado!');
-    } else {
+    } catch {
       toast.error(`Produto não encontrado para o código: ${barcode}`);
+    } finally {
+      setIsSearching(false);
     }
   }
 
@@ -87,6 +94,9 @@ export function Saida() {
 
     setSelectedProduct(null);
     setQuantity(1);
+    setTimeout(() => {
+      confirmRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 150);
   };
 
   const handleRemoveFromCart = (productId: number) => {
@@ -145,6 +155,7 @@ export function Saida() {
       return;
     }
 
+    setValidationErrors({});
     try {
       await createSale.mutateAsync({
         customer_name: client || undefined,
@@ -170,7 +181,7 @@ export function Saida() {
       setNotes('');
       setPaymentMethod('pix');
     } catch (error) {
-      extractValidationErrors(error);
+      setValidationErrors(extractValidationErrors(error));
     }
   };
 
@@ -229,10 +240,20 @@ export function Saida() {
             <button
               type="button"
               onClick={() => setScannerOpen(true)}
-              className="w-full flex items-center justify-center gap-2 py-3 bg-[#111111] text-white rounded-xl font-medium hover:bg-[#111111]/90 transition-colors"
+              disabled={isSearching}
+              className="w-full flex items-center justify-center gap-2 py-3 bg-[#111111] text-white rounded-xl font-medium hover:bg-[#111111]/90 transition-colors disabled:opacity-50"
             >
-              <Camera className="w-5 h-5" />
-              Escanear Código de Barras
+              {isSearching ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Buscando produto...
+                </>
+              ) : (
+                <>
+                  <Camera className="w-5 h-5" />
+                  Escanear Código de Barras
+                </>
+              )}
             </button>
 
             {selectedProduct && (
@@ -284,14 +305,24 @@ export function Saida() {
                       </button>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={handleAddToCart}
-                      disabled={!!insufficientStock}
-                      className="px-6 py-2 bg-[#EF4444] text-white rounded-lg font-medium hover:bg-[#EF4444]/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      Adicionar ao Carrinho
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={handleAddToCart}
+                        disabled={!!insufficientStock}
+                        className="flex-1 px-3 py-2 border-2 border-[#EF4444] text-[#EF4444] rounded-lg font-medium hover:bg-[#EF4444]/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                      >
+                        + Carrinho
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleAddToCart}
+                        disabled={!!insufficientStock}
+                        className="flex-1 px-3 py-2 bg-[#EF4444] text-white rounded-lg font-medium hover:bg-[#EF4444]/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                      >
+                        Adicionar e Confirmar ↓
+                      </button>
+                    </div>
                   </div>
 
                   {insufficientStock && (
@@ -457,7 +488,7 @@ export function Saida() {
                 </div>
               </div>
 
-              <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+              <div ref={confirmRef} className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
                 <h2 className="text-xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D] mb-4">
                   4. Confirmar Saída
                 </h2>
@@ -511,6 +542,21 @@ export function Saida() {
           )}
         </form>
       </div>
+
+      {(cartItems.length > 0 || cartServices.length > 0) && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40">
+          <button
+            type="button"
+            onClick={() => confirmRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+            className="flex items-center gap-2 px-5 py-3 bg-[#EF4444] text-white rounded-full shadow-lg font-medium text-sm hover:bg-[#EF4444]/90 transition-colors whitespace-nowrap"
+          >
+            <span className="w-5 h-5 bg-white text-[#EF4444] rounded-full text-xs font-bold flex items-center justify-center">
+              {cartItems.length + cartServices.length}
+            </span>
+            {cartItems.length + cartServices.length === 1 ? '1 item' : `${cartItems.length + cartServices.length} itens`} no carrinho — Confirmar ↓
+          </button>
+        </div>
+      )}
 
       {scannerOpen && (
         <BarcodeScanner

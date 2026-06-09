@@ -30,7 +30,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   }, [onScan])
 
   const { ref: cameraRef } = useZxing({
-    onDecodeResult: (result) => handleScan(result.rawValue),
+    onDecodeResult: (result) => handleScan(result.rawValue.trim()),
     paused: mode !== 'camera',
     constraints: {
       video: {

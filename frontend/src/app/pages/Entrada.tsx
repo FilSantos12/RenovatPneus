@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Search, Plus, Minus, Check, Camera, Loader2 } from 'lucide-react';
 import { useProducts } from '@/hooks/useProducts';
 import { useCreateMovement } from '@/hooks/useMovements';
@@ -6,6 +6,7 @@ import { BarcodeScanner } from '../components/BarcodeScanner/BarcodeScanner';
 import type { Product } from '../types';
 import { extractValidationErrors, getFirstError } from '@/lib/errors';
 import { toast } from 'sonner';
+import { productService } from '@/services/product.service';
 
 export function Entrada() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -14,20 +15,28 @@ export function Entrada() {
   const [notes, setNotes] = useState('');
   const [showResults, setShowResults] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Record<string, string[]>>({});
 
   const { data } = useProducts();
   const products: Product[] = data?.data ?? [];
   const createMovement = useCreateMovement();
+  const formRef = useRef<HTMLDivElement>(null);
 
-  function handleScan(barcode: string) {
-    const product = products.find((p) => p.barcode === barcode);
-    if (product) {
+  async function handleScan(barcode: string) {
+    setIsSearching(true);
+    try {
+      const product = await productService.findByBarcode(barcode);
       setSelectedProduct(product);
       setScannerOpen(false);
       toast.success('Produto encontrado!');
-    } else {
+      setTimeout(() => {
+        formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 150);
+    } catch {
       toast.error(`Produto não encontrado para o código: ${barcode}`);
+    } finally {
+      setIsSearching(false);
     }
   }
 
@@ -123,10 +132,20 @@ export function Entrada() {
             <button
               type="button"
               onClick={() => setScannerOpen(true)}
-              className="w-full flex items-center justify-center gap-2 py-3 bg-[#111111] text-white rounded-xl font-medium hover:bg-[#111111]/90 transition-colors"
+              disabled={isSearching}
+              className="w-full flex items-center justify-center gap-2 py-3 bg-[#111111] text-white rounded-xl font-medium hover:bg-[#111111]/90 transition-colors disabled:opacity-50"
             >
-              <Camera className="w-5 h-5" />
-              Escanear Código de Barras
+              {isSearching ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Buscando produto...
+                </>
+              ) : (
+                <>
+                  <Camera className="w-5 h-5" />
+                  Escanear Código de Barras
+                </>
+              )}
             </button>
 
             {selectedProduct && (
@@ -141,6 +160,9 @@ export function Entrada() {
                     </p>
                     <p className="text-sm text-[#2D2D2D]/60 mt-2">
                       Estoque atual: <strong>{selectedProduct.quantity}</strong> unidades
+                    </p>
+                    <p className="text-xs text-[#22C55E] font-medium mt-2">
+                      ↓ Preencha os dados abaixo para confirmar
                     </p>
                   </div>
                   <button
@@ -158,7 +180,7 @@ export function Entrada() {
           {/* Entry Details */}
           {selectedProduct && (
             <>
-              <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+              <div ref={formRef} className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
                 <h2 className="text-xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D] mb-4">
                   2. Dados da Entrada
                 </h2>
