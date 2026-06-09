@@ -49,6 +49,7 @@ echo  [1/7] Extraindo runtime...
 if not exist "%RUNTIME%" mkdir "%RUNTIME%"
 powershell -NoProfile -Command "Expand-Archive -Path '%~dp0..\runtime\php.zip' -DestinationPath '%RUNTIME%\php' -Force" >nul 2>&1
 copy /Y "%~dp0..\runtime\nssm.exe" "%NSSM%" >nul
+copy /Y "%~dp0..\config\php.ini"   "%RUNTIME%\php\php.ini" >nul
 
 if not exist "%PHP%" (
     echo  ERRO: php.exe nao encontrado apos extracao.
@@ -85,6 +86,7 @@ if exist "%TEMP%\renovatpneus_env.bak" (
 :: [4/7] Banco de dados
 echo  [4/7] Configurando banco de dados...
 cd /d "%INSTALL_DIR%\backend"
+if not exist "database\database.sqlite" type nul > "database\database.sqlite"
 if "!IS_UPDATE!"=="0" (
     "%PHP%" artisan migrate --force --seed
     echo        Banco criado e populado.
