@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\UserService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class UserController extends Controller
 {
@@ -32,6 +33,13 @@ class UserController extends Controller
         $this->authorize('create', User::class);
 
         $user = $this->service->store($request->validated());
+
+        Log::info('Usuário criado', [
+            'new_user_id'  => $user->id,
+            'new_username' => $user->username,
+            'role'         => $user->role,
+            'created_by'   => auth()->id(),
+        ]);
 
         return new UserResource($user);
     }
@@ -63,6 +71,13 @@ class UserController extends Controller
         $this->authorize('update', $user);
 
         $user->update(['active' => !$user->active]);
+
+        Log::warning('Status de usuário alterado', [
+            'target_user_id'  => $user->id,
+            'target_username' => $user->username,
+            'active'          => $user->active,
+            'changed_by'      => auth()->id(),
+        ]);
 
         return response()->json([
             'message' => $user->active ? 'Usuário ativado.' : 'Usuário desativado.',

@@ -8,6 +8,7 @@ use App\Http\Resources\MovementResource;
 use App\Models\Movement;
 use App\Services\MovementService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class MovementController extends Controller
 {
@@ -33,6 +34,14 @@ class MovementController extends Controller
 
         $movement = $this->service->store($request->validated(), $request->user());
 
+        Log::info('Entrada de estoque registrada', [
+            'movement_id' => $movement->id,
+            'product_id'  => $movement->product_id,
+            'quantity'    => $movement->quantity,
+            'user_id'     => auth()->id(),
+            'user_name'   => auth()->user()->name,
+        ]);
+
         return new MovementResource($movement);
     }
 
@@ -48,6 +57,14 @@ class MovementController extends Controller
     public function destroy(Movement $movement): \Illuminate\Http\JsonResponse
     {
         $this->authorize('delete', $movement);
+
+        Log::warning('Entrada de estoque excluída', [
+            'movement_id' => $movement->id,
+            'product_id'  => $movement->product_id,
+            'user_id'     => auth()->id(),
+            'user_name'   => auth()->user()->name,
+        ]);
+
         $this->service->destroy($movement);
         return response()->json(['message' => 'Entrada excluída com sucesso.']);
     }

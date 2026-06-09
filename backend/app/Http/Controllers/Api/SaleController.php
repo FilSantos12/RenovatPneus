@@ -10,6 +10,7 @@ use App\Models\Sale;
 use App\Services\SaleService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class SaleController extends Controller
 {
@@ -35,6 +36,14 @@ class SaleController extends Controller
 
         $sale = $this->service->store($request->validated(), $request->user());
 
+        Log::info('Venda criada', [
+            'sale_id'   => $sale->id,
+            'user_id'   => auth()->id(),
+            'user_name' => auth()->user()->name,
+            'total'     => $sale->total,
+            'payment'   => $sale->payment_method,
+        ]);
+
         return new SaleResource($sale);
     }
 
@@ -59,6 +68,13 @@ class SaleController extends Controller
     public function destroy(Sale $sale): JsonResponse
     {
         $this->authorize('delete', $sale);
+
+        Log::warning('Venda excluída', [
+            'sale_id'   => $sale->id,
+            'user_id'   => auth()->id(),
+            'user_name' => auth()->user()->name,
+            'total'     => $sale->total,
+        ]);
 
         $this->service->destroy($sale);
 
