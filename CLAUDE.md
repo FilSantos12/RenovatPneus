@@ -117,7 +117,7 @@ frontend/
         │   │   └── ProductFormModal.tsx  # modal único criar/editar produto + scanner + barcode preview
         │   │   └── (view inline em Estoque.tsx)  # modal somente-leitura com detalhes do produto
         │   ├── Historico/
-        │   │   └── HistoricoDetalheModal.tsx  # modal detalhe entrada/venda; botão "Marcar como pago" (só fiado pendente); exporta tipo HistoricoItem
+        │   │   └── HistoricoDetalheModal.tsx  # modal detalhe entrada/venda; botão "Marcar como pago" (só fiado pendente); botão "Excluir" (só ADM, confirmação inline); exporta tipo HistoricoItem
         │   └── ui/                     # shadcn/ui — não editar diretamente
         └── pages/
             ├── Login.tsx           # navega via useEffect após isAuthenticated=true
@@ -190,14 +190,14 @@ backend/
 │   ├── Policies/
 │   │   ├── UserPolicy.php
 │   │   ├── ProductPolicy.php
-│   │   ├── MovementPolicy.php   # update/delete sempre false — imutável
+│   │   ├── MovementPolicy.php   # update: false (imutável); delete: apenas ADM
 │   │   ├── ServicePolicy.php
 │   │   └── SalePolicy.php
 │   └── Services/
 │       ├── AuthService.php      # login por username + check active
 │       ├── ProductService.php   # store() gera barcode automaticamente se vier vazio
-│       ├── MovementService.php  # lockForUpdate() + DB::transaction
-│       ├── SaleService.php      # reutiliza MovementService para baixa de estoque; à vista → PAGO+paid_at; fiado → PENDENTE
+│       ├── MovementService.php  # lockForUpdate() + DB::transaction; destroy() reverte increment de estoque antes de deletar
+│       ├── SaleService.php      # reutiliza MovementService para baixa de estoque; à vista → PAGO+paid_at; fiado → PENDENTE; destroy() restaura estoque por item antes de soft-delete
 │       ├── UserService.php
 │       └── DashboardService.php  # BRT-aware (Carbon whereBetween); gráfico 7 dias agregado no backend; sales_today usa whereHas('items')
 ├── database/
@@ -274,7 +274,8 @@ Sale.created_at         // não "date"
 | GET | `/api/products/barcode/{barcode}` | ✅ | — | Busca por código de barras |
 | GET/PUT/DELETE | `/api/products/{product}` | ✅ | PUT/DELETE: adm | — |
 | GET/POST | `/api/movements` | ✅ | — | Listagem e criação de movimentações |
-| GET | `/api/movements/{movement}` | ✅ | — | Sem update/delete (imutável) |
+| GET | `/api/movements/{movement}` | ✅ | — | Detalhe da movimentação |
+| DELETE | `/api/movements/{movement}` | ✅ | adm | Exclui entrada e reverte estoque |
 | GET/POST | `/api/services` | ✅ | POST: adm | CRUD de serviços |
 | GET/PUT/DELETE | `/api/services/{service}` | ✅ | PUT/DELETE: adm | — |
 | GET/POST | `/api/sales` | ✅ | — | CRUD de vendas |
@@ -301,7 +302,9 @@ Request → Route → Middleware (auth:sanctum, role)
 - **Status inicial da venda:** `SaleService::store` — `payment_method=fiado` → `status=PENDENTE, paid_at=null`; qualquer outro método (à vista) → `status=PAGO, paid_at=now()`
 - **Quitar fiado:** `PATCH /api/sales/{sale}/status` com `{ status: 'pago' }` → `SaleService::updateStatus` seta `paid_at=now()`. Policy: ADM pode qualquer venda; operador só as próprias
 - **Estoque insuficiente:** lança `InsufficientStockException` → resposta 422 automática
-- **Movimentação imutável:** `MovementPolicy` retorna `false` para update/delete
+- **Movimentação imutável:** `MovementPolicy` retorna `false` para `update`; `delete` é permitido apenas para ADM
+- **Exclusão de venda (ADM):** `SaleService::destroy` carrega `items`, incrementa o estoque de cada produto e só então faz o soft-delete — tudo em `DB::transaction`
+- **Exclusão de entrada (ADM):** `MovementService::destroy` usa `lockForUpdate()` para reverter o `increment` do produto e deleta o registro — tudo em `DB::transaction`
 - **Usuário desativado:** `AuthService` verifica `active = true` no login
 - **Barcode interno:** `BarcodeSequence::generateNext()` usa `lockForUpdate()` — sem duplicatas; `peekNext()` só lê (preview sem reservar)
 - **Dashboard timezone:** queries usam `Carbon::now('America/Sao_Paulo')->startOfDay()->setTimezone('UTC')` — fuso centralizado em `config('app.business_timezone')`; NÃO alterar `app.timezone` (armazenamento UTC)
@@ -346,7 +349,7 @@ Login por **username** (não email). Email existe na tabela mas não é usado no
 |---|---|---|
 | `users` | ✅ | Campo `username` único; `active` para desativar sem deletar |
 | `products` | ✅ | `barcode` único + indexado; nullable no store (gerado se vazio) |
-| `movements` | ❌ | Auditoria — nunca apaga |
+| `movements` | ❌ | ADM pode excluir via `DELETE /api/movements/{id}`; exclusão sempre reverte o estoque do produto |
 | `services` | ✅ | Campo `price_cost` nullable — custo de execução, usado no cálculo de lucro em Finanças |
 | `sales` | ✅ | |
 | `sale_items` | ❌ | Registro financeiro — nunca apaga |
@@ -569,4 +572,8 @@ NSSM 2.24 (x64) em `installer/tools/nssm.exe`.
 | Saida: dois botões no card (+ Carrinho / Adicionar e Confirmar ↓) + auto-scroll + badge fixo | ✅ Concluído |
 | Saida: validationErrors capturado corretamente no catch (era descartado) | ✅ Corrigido |
 | BarcodeScanner: rawValue.trim() defensivo na leitura da câmera | ✅ Concluído |
+| Exclusão de venda restrita ao ADM: SalePolicy + SaleController (já existiam) | ✅ Concluído |
+| Exclusão de entrada restrita ao ADM: MovementPolicy::delete → ADM; MovementController::destroy criado; rota DELETE registrada | ✅ Concluído |
+| Botão Excluir no HistoricoDetalheModal: visível só para ADM, confirmação inline, fecha modal após sucesso | ✅ Concluído |
+| Reversão de estoque na exclusão: SaleService::destroy restaura itens; MovementService::destroy reverte quantidade | ✅ Corrigido |
 | Fase 5 — Testes + build de produção + instalador .exe | ⏳ Pendente |

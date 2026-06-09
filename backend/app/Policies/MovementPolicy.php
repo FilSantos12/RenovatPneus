@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Enums\UserRole;
 use App\Models\Movement;
 use App\Models\User;
 
@@ -30,6 +31,6 @@ class MovementPolicy
 
     public function delete(User $auth, Movement $movement): bool
     {
-        return false;
+        return $auth->role === UserRole::ADM;
     }
 }

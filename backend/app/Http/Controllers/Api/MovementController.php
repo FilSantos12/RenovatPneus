@@ -44,4 +44,11 @@ class MovementController extends Controller
 
         return new MovementResource($movement);
     }
+
+    public function destroy(Movement $movement): \Illuminate\Http\JsonResponse
+    {
+        $this->authorize('delete', $movement);
+        $this->service->destroy($movement);
+        return response()->json(['message' => 'Entrada excluída com sucesso.']);
+    }
 }

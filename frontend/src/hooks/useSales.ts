@@ -66,10 +66,18 @@ export function useDeleteSale() {
     mutationFn: (id: number) => saleService.remove(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: SALE_KEYS.all })
+      queryClient.invalidateQueries({ queryKey: PRODUCT_KEYS.all })
+      queryClient.invalidateQueries({ queryKey: MOVEMENT_KEYS.all })
+      queryClient.invalidateQueries({ queryKey: DASHBOARD_KEYS.summary })
       toast.success('Venda removida com sucesso.')
     },
     onError: (error: unknown) => {
-      toast.error(getErrorMessage(error, 'Erro ao remover venda.'))
+      const httpError = error as { response?: { status?: number } }
+      if (httpError?.response?.status === 403) {
+        toast.error('Apenas o administrador pode excluir vendas.')
+      } else {
+        toast.error(getErrorMessage(error, 'Erro ao remover venda.'))
+      }
     },
   })
 }

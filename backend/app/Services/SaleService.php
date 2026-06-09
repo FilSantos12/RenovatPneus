@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\PaymentMethod;
 use App\Enums\SaleStatus;
+use App\Models\Product;
 use App\Models\Sale;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -84,6 +85,13 @@ class SaleService
 
     public function destroy(Sale $sale): void
     {
-        $sale->delete();
+        DB::transaction(function () use ($sale) {
+            $sale->load('items');
+            foreach ($sale->items as $item) {
+                Product::where('id', $item->product_id)
+                       ->increment('quantity', $item->quantity);
+            }
+            $sale->delete();
+        });
     }
 }

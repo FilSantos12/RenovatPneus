@@ -30,7 +30,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/products/barcode/{barcode}', [ProductController::class, 'showByBarcode']);
     Route::apiResource('products', ProductController::class);
 
-    Route::apiResource('movements', MovementController::class)->only(['index', 'show', 'store']);
+    Route::apiResource('movements', MovementController::class)->only(['index', 'show', 'store', 'destroy']);
 
     Route::apiResource('services', ServiceController::class);
 

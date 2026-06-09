@@ -41,4 +41,17 @@ class MovementService
             return $movement->load(['product', 'user']);
         });
     }
+
+    public function destroy(Movement $movement): void
+    {
+        DB::transaction(function () use ($movement) {
+            $product = Product::lockForUpdate()->findOrFail($movement->product_id);
+            if ($movement->type === MovementType::ENTRADA) {
+                $product->decrement('quantity', $movement->quantity);
+            } else {
+                $product->increment('quantity', $movement->quantity);
+            }
+            $movement->delete();
+        });
+    }
 }

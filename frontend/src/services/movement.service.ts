@@ -24,4 +24,8 @@ export const movementService = {
     const { data } = await api.post('/api/movements', payload)
     return data.data
   },
+
+  async remove(id: number): Promise<void> {
+    await api.delete(`/api/movements/${id}`)
+  },
 }

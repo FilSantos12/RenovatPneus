@@ -3,7 +3,9 @@ import { X, Printer, FileSpreadsheet, CheckCircle2 } from 'lucide-react'
 import { useReactToPrint } from 'react-to-print'
 import { exportSaleToExcel } from '@/lib/export'
 import { saleStatusLabel } from '@/lib/saleStatus'
-import { useUpdateSaleStatus } from '@/hooks/useSales'
+import { useUpdateSaleStatus, useDeleteSale } from '@/hooks/useSales'
+import { useDeleteMovement } from '@/hooks/useMovements'
+import { useAuth } from '@/app/contexts/AuthContext'
 import type { Movement, Sale } from '@/app/types'
 
 export type HistoricoItem =
@@ -59,6 +61,10 @@ export function HistoricoDetalheModal({ item, onClose }: Props) {
   const [confirmando, setConfirmando] = useState(false)
   const [erroMsg, setErroMsg]         = useState<string | null>(null)
   const updateStatus = useUpdateSaleStatus()
+  const { user } = useAuth()
+  const deleteSale = useDeleteSale()
+  const deleteMovement = useDeleteMovement()
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   const showQuitar =
     isVenda && sale !== null &&
@@ -83,6 +89,19 @@ export function HistoricoDetalheModal({ item, onClose }: Props) {
         },
       }
     )
+  }
+
+  const handleDelete = async () => {
+    try {
+      if (isVenda && sale) {
+        await deleteSale.mutateAsync(sale.id)
+      } else if (!isVenda && entrada) {
+        await deleteMovement.mutateAsync(entrada.id)
+      }
+      onClose()
+    } catch {
+      // erro tratado no onError do hook
+    }
   }
 
   return (
@@ -232,6 +251,38 @@ export function HistoricoDetalheModal({ item, onClose }: Props) {
                 )}
               </div>
               {erroMsg && <p className="text-xs text-red-600">{erroMsg}</p>}
+            </div>
+          )}
+          {user?.role === 'adm' && (
+            <div className="flex items-center gap-2">
+              {!confirmingDelete ? (
+                <button
+                  type="button"
+                  onClick={() => setConfirmingDelete(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition-colors"
+                >
+                  Excluir
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleDelete}
+                    disabled={deleteSale.isPending || deleteMovement.isPending}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {(deleteSale.isPending || deleteMovement.isPending) ? 'Excluindo...' : 'Confirmar exclusão?'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingDelete(false)}
+                    disabled={deleteSale.isPending || deleteMovement.isPending}
+                    className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 transition-colors disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
+                </>
+              )}
             </div>
           )}
           <div className="flex gap-2 ml-auto">
