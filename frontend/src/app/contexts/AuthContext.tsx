@@ -29,8 +29,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function logout() {
-    await authService.logout()
-    setUser(null)
+    try {
+      await authService.logout()
+    } catch {
+      // mesmo se a requisição falhar, limpa o estado local
+    } finally {
+      setUser(null)
+    }
   }
 
   return (

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ScanLine, Plus, Minus, Check, AlertCircle, Loader2 } from 'lucide-react';
-import { useProducts } from '@/hooks/useProducts';
 import { useCreateMovement } from '@/hooks/useMovements';
+import { productService } from '@/services/product.service';
 import { BarcodeScanner } from '../components/BarcodeScanner/BarcodeScanner';
 import type { Product } from '../types';
 import { toast } from 'sonner';
@@ -17,19 +17,21 @@ export function Scanner() {
   const [notes, setNotes] = useState('');
   const [scannerOpen, setScannerOpen] = useState(false);
 
-  const { data: productsData } = useProducts();
-  const products: Product[] = productsData?.data ?? [];
+  const [isSearching, setIsSearching] = useState(false);
   const createMovement = useCreateMovement();
 
-  const handleProductScanned = (code: string) => {
-    const product = products.find((p) => p.barcode === code);
-    if (product) {
+  const handleProductScanned = async (code: string) => {
+    setIsSearching(true);
+    try {
+      const product = await productService.findByBarcode(code);
       setScannedProduct(product);
       setShowMovementType(true);
       setScannerOpen(false);
       toast.success('Produto encontrado!');
-    } else {
+    } catch {
       toast.error(`Produto não encontrado: ${code}`);
+    } finally {
+      setIsSearching(false);
     }
   };
 
@@ -41,14 +43,18 @@ export function Scanner() {
   const handleConfirm = async () => {
     if (!scannedProduct || !movementType) return;
 
-    await createMovement.mutateAsync({
-      product_id: scannedProduct.id,
-      type: movementType,
-      quantity,
-      notes: notes || undefined,
-    });
-
-    handleReset();
+    try {
+      await createMovement.mutateAsync({
+        product_id: scannedProduct.id,
+        type: movementType,
+        quantity,
+        notes: notes || undefined,
+      });
+      handleReset();
+    } catch {
+      // erro tratado pelo onError do hook (toast já exibido)
+      // não chama handleReset() — mantém os dados para o usuário corrigir
+    }
   };
 
   const handleReset = () => {
@@ -84,10 +90,11 @@ export function Scanner() {
             </p>
             <button
               onClick={() => setScannerOpen(true)}
-              className="flex items-center justify-center gap-3 px-8 py-4 bg-[#F97316] text-white rounded-xl font-medium text-lg hover:bg-[#F97316]/90 transition-colors mx-auto"
+              disabled={isSearching}
+              className="flex items-center justify-center gap-3 px-8 py-4 bg-[#F97316] text-white rounded-xl font-medium text-lg hover:bg-[#F97316]/90 transition-colors mx-auto disabled:opacity-50"
             >
-              <ScanLine className="w-6 h-6" />
-              Escanear Código
+              {isSearching ? <Loader2 className="w-6 h-6 animate-spin" /> : <ScanLine className="w-6 h-6" />}
+              {isSearching ? 'Buscando produto...' : 'Escanear Código'}
             </button>
           </div>
         </div>

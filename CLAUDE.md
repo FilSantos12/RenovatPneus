@@ -127,7 +127,7 @@ frontend/
             ├── Estoque.tsx         # CRUD completo: visualizar, cadastro, edição, exclusão (ADM), etiqueta
             ├── Entrada.tsx         # usa useCreateMovement(), BarcodeScanner integrado
             ├── Saida.tsx           # usa useCreateSale(), BarcodeScanner integrado
-            ├── Scanner.tsx         # usa useProducts() + useCreateMovement()
+            ├── Scanner.tsx         # usa productService.findByBarcode() + useCreateMovement(); handleProductScanned async via API (não lista local)
             ├── Etiquetas.tsx       # LabelsPage: preview, A4/térmica, react-to-print v3
             ├── Historico.tsx       # entradas + vendas unificadas; filtros tipo/data/busca; modal detalhe; export Excel/PDF
             ├── Financas.tsx        # useFinanceSummary(period); cards receita/custo/lucro; gráficos Recharts; apenas ADM
@@ -270,7 +270,7 @@ Sale.created_at         // não "date"
 | POST | `/api/logout` | ✅ | — | Logout |
 | GET | `/api/me` | ✅ | — | Usuário autenticado |
 | GET | `/api/dashboard` | ✅ | — | Resumo do dia |
-| GET | `/api/finance/summary` | ✅ | — | Resumo financeiro por período (today\|month\|year) |
+| GET | `/api/finance/summary` | ✅ | adm | Resumo financeiro por período (today\|month\|year) |
 | GET/POST | `/api/products` | ✅ | POST: adm | CRUD de produtos |
 | GET | `/api/products/next-barcode` | ✅ | adm | Preview do próximo código RNV (peekNext) |
 | GET | `/api/products/barcode/{barcode}` | ✅ | — | Busca por código de barras |
@@ -580,4 +580,9 @@ NSSM 2.24 (x64) em `installer/tools/nssm.exe`.
 | Reversão de estoque na exclusão: SaleService::destroy restaura itens; MovementService::destroy reverte quantidade | ✅ Corrigido |
 | Usuários: UserFormModal unificado (criar/editar), confirmação inline de desativação, botão desativar oculto na própria linha do ADM | ✅ Concluído |
 | Backend: toggleActive bloqueia auto-desativação (403); UserService::update protege role do próprio ADM | ✅ Concluído |
+| Auditoria: AuthController logout corrigido — `Auth::guard('web')->logout()` (era `Auth::logout()` que lançava 500 no Sanctum) | ✅ Corrigido |
+| Auditoria: AuthContext logout com try/catch — `setUser(null)` movido para `finally` (usuário deslogado do frontend mesmo se o backend falhar) | ✅ Corrigido |
+| Auditoria: Scanner.tsx busca via API — `handleProductScanned` usa `productService.findByBarcode()` em vez de `products.find()` local (era limitado a 15 itens) | ✅ Corrigido |
+| Auditoria: Scanner.tsx handleConfirm com try/catch — `handleReset()` só chamado no sucesso; estado preservado em caso de erro | ✅ Corrigido |
+| Auditoria: GET /finance/summary protegido com `role:adm` — era acessível a qualquer OPERADOR autenticado (`SalePolicy::viewAny` retorna `true` para todos) | ✅ Corrigido |
 | Fase 5 — Testes + build de produção + instalador .exe | ⏳ Pendente |

@@ -23,7 +23,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
 
     Route::get('/dashboard', [DashboardController::class, 'summary']);
-    Route::get('/finance/summary', [FinanceController::class, 'summary']);
 
     // Rotas fixas de produtos ANTES do apiResource (evita conflito com route model binding)
     Route::get('/products/next-barcode', [ProductController::class, 'nextBarcode']);
@@ -37,8 +36,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/sales/{sale}/status', [SaleController::class, 'updateStatus']);
     Route::apiResource('sales', SaleController::class);
 
-    // Usuários — só ADM (middleware role complementa as Policies)
+    // ADM — finanças e usuários
     Route::middleware('role:adm')->group(function () {
+        Route::get('/finance/summary', [FinanceController::class, 'summary']);
         Route::patch('/users/{user}/toggle-active', [UserController::class, 'toggleActive']);
         Route::apiResource('users', UserController::class);
     });
