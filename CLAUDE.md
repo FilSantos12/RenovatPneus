@@ -320,6 +320,40 @@ Request → Route → Middleware (auth:sanctum, role)
 
 ---
 
+## Logs e rastreabilidade
+
+### Configuração (`.env`)
+
+```ini
+LOG_CHANNEL=daily      # arquivo rotacionado por dia
+LOG_LEVEL=warning      # grava: warning, error, critical, alert, emergency
+LOG_DAYS=30            # mantém 30 arquivos; descarta os mais antigos
+```
+
+Arquivos em `backend/storage/logs/laravel-YYYY-MM-DD.log`.
+
+> `Log::info()` chamado explicitamente no código **sempre é gravado**, independente do `LOG_LEVEL=warning` — esse nível só filtra logs automáticos do framework (queries SQL, boot, etc.).
+
+### Ações logadas
+
+| Controller | Método | Nível | Evento |
+|---|---|---|---|
+| `AuthController` | `login` (sucesso) | `info` | `Login realizado` — `user_id`, `username`, `ip` |
+| `AuthController` | `login` (falha) | `warning` | `Tentativa de login falhou` — `username`, `ip` |
+| `AuthController` | `logout` | `info` | `Logout realizado` — `user_id`, `username` |
+| `SaleController` | `store` | `info` | `Venda criada` — `sale_id`, `user_id`, `user_name`, `total`, `payment` |
+| `SaleController` | `destroy` | `warning` | `Venda excluída` — `sale_id`, `user_id`, `user_name`, `total` |
+| `MovementController` | `store` | `info` | `Entrada de estoque registrada` — `movement_id`, `product_id`, `quantity`, `user_id`, `user_name` |
+| `MovementController` | `destroy` | `warning` | `Entrada de estoque excluída` — `movement_id`, `product_id`, `user_id`, `user_name` |
+| `UserController` | `store` | `info` | `Usuário criado` — `new_user_id`, `new_username`, `role`, `created_by` |
+| `UserController` | `toggleActive` | `warning` | `Status de usuário alterado` — `target_user_id`, `target_username`, `active`, `changed_by` |
+
+### Nota sobre falha de login
+
+`AuthService::login()` lança `AuthenticationException`. O `AuthController::login` captura, loga e re-lança — o Laravel continua retornando o 401 normalmente.
+
+---
+
 ## Autenticação
 
 Login por **username** (não email). Email existe na tabela mas não é usado no login.
@@ -585,4 +619,6 @@ NSSM 2.24 (x64) em `installer/tools/nssm.exe`.
 | Auditoria: Scanner.tsx busca via API — `handleProductScanned` usa `productService.findByBarcode()` em vez de `products.find()` local (era limitado a 15 itens) | ✅ Corrigido |
 | Auditoria: Scanner.tsx handleConfirm com try/catch — `handleReset()` só chamado no sucesso; estado preservado em caso de erro | ✅ Corrigido |
 | Auditoria: GET /finance/summary protegido com `role:adm` — era acessível a qualquer OPERADOR autenticado (`SalePolicy::viewAny` retorna `true` para todos) | ✅ Corrigido |
+| Logs: rotação diária configurada (`LOG_CHANNEL=daily`, `LOG_LEVEL=warning`, `LOG_DAYS=30`) | ✅ Concluído |
+| Logs: rastreabilidade em Auth (login sucesso/falha, logout), Sale, Movement e User | ✅ Concluído |
 | Fase 5 — Testes + build de produção + instalador .exe | ⏳ Pendente |
