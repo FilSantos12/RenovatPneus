@@ -383,9 +383,9 @@ O hook `useBarcodeScan` captura teclado com buffer + timeout de 100ms e threshol
 
 ### Modo câmera (react-zxing v3)
 ```typescript
-// API v3 — usa result.rawValue; câmera traseira preferida; onError para NotAllowedError/NotFoundError
+// API v3 — usa result.rawValue.trim(); câmera traseira preferida; onError para NotAllowedError/NotFoundError
 const { ref } = useZxing({
-  onDecodeResult: (result) => handleScan(result.rawValue),
+  onDecodeResult: (result) => handleScan(result.rawValue.trim()),  // .trim() defensivo
   paused: mode !== 'camera',
   constraints: { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } },
   onError: (error) => { /* exibe mensagem + fallback manual */ },
@@ -399,6 +399,19 @@ const { ref } = useZxing({
 
 ### Cooldown anti-duplicata + feedback
 `lastScanRef` com reset de 2 segundos evita disparo duplo. Pós-leitura: borda do viewfinder fica verde por 1s e `navigator.vibrate?.(200)` dispara.
+
+### Busca de produto por barcode — fluxo pós-scan
+`handleScan` em `Entrada.tsx` e `Saida.tsx` é **async** e chama `productService.findByBarcode(barcode)` (GET `/api/products/barcode/{code}`) em vez de fazer `products.find()` local. Isso garante que qualquer produto seja encontrado independente da paginação (a lista local tem apenas 15 itens da página 1). O estado `isSearching` desabilita o botão de escanear durante a busca API e exibe spinner `Buscando produto...`.
+
+### UX pós-scan — Entrada
+Após produto encontrado: auto-scroll via `formRef.current?.scrollIntoView()` com delay 150ms leva diretamente para a seção "2. Dados da Entrada". Card verde exibe `↓ Preencha os dados abaixo para confirmar`.
+
+### UX pós-scan — Saida
+Card do produto exibe dois botões:
+- **`+ Carrinho`** (outline): adiciona ao carrinho + auto-scroll via `confirmRef` para "4. Confirmar Saída"
+- **`Adicionar e Confirmar ↓`** (filled): mesma ação, label mais explícito para fluxo de item único
+
+Badge fixo `fixed bottom-4` aparece quando `cartItems.length + cartServices.length > 0`, mostrando contagem e acionando scroll para a seção de confirmação ao clicar. `validationErrors` é capturado e limpo corretamente no submit (era descartado antes).
 
 ### HTTPS — acesso LAN (celular)
 `@vitejs/plugin-basic-ssl` em `vite.config.ts` habilita HTTPS no Vite dev server.
@@ -551,4 +564,9 @@ NSSM 2.24 (x64) em `installer/tools/nssm.exe`.
 | Scanner.tsx: substituído mock por BarcodeScanner real | ✅ Concluído |
 | useBarcodeScan: threshold 50ms para distinguir leitor USB de digitação humana | ✅ Concluído |
 | Cadastro produto: barcode somente-leitura, gerado no backend, tela de sucesso pós-criação | ✅ Concluído |
+| Entrada/Saida: handleScan async via GET /api/products/barcode/{code} — não mais limitado a 15 produtos | ✅ Concluído |
+| Entrada: auto-scroll + indicador "↓ Preencha os dados abaixo" após scan | ✅ Concluído |
+| Saida: dois botões no card (+ Carrinho / Adicionar e Confirmar ↓) + auto-scroll + badge fixo | ✅ Concluído |
+| Saida: validationErrors capturado corretamente no catch (era descartado) | ✅ Corrigido |
+| BarcodeScanner: rawValue.trim() defensivo na leitura da câmera | ✅ Concluído |
 | Fase 5 — Testes + build de produção + instalador .exe | ⏳ Pendente |
