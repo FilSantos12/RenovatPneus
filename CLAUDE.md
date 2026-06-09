@@ -118,6 +118,8 @@ frontend/
         │   │   └── (view inline em Estoque.tsx)  # modal somente-leitura com detalhes do produto
         │   ├── Historico/
         │   │   └── HistoricoDetalheModal.tsx  # modal detalhe entrada/venda; botão "Marcar como pago" (só fiado pendente); botão "Excluir" (só ADM, confirmação inline); exporta tipo HistoricoItem
+        │   ├── Users/
+        │   │   └── UserFormModal.tsx       # modal unificado criar/editar usuário; senha opcional na edição; role desabilitado ao editar o próprio ADM; toggle status visível apenas na edição
         │   └── ui/                     # shadcn/ui — não editar diretamente
         └── pages/
             ├── Login.tsx           # navega via useEffect após isAuthenticated=true
@@ -130,7 +132,7 @@ frontend/
             ├── Historico.tsx       # entradas + vendas unificadas; filtros tipo/data/busca; modal detalhe; export Excel/PDF
             ├── Financas.tsx        # useFinanceSummary(period); cards receita/custo/lucro; gráficos Recharts; apenas ADM
             ├── Servicos.tsx        # usa useServices(), CRUD completo
-            ├── Usuarios.tsx        # usa useUsers(), useToggleUserActive() — apenas ADM
+            ├── Usuarios.tsx        # usa useUsers(), useToggleUserActive(), UserFormModal; confirmação inline de desativar; botão desativar oculto na linha do próprio ADM — apenas ADM
             └── AcessoNegado.tsx
 ```
 
@@ -576,4 +578,6 @@ NSSM 2.24 (x64) em `installer/tools/nssm.exe`.
 | Exclusão de entrada restrita ao ADM: MovementPolicy::delete → ADM; MovementController::destroy criado; rota DELETE registrada | ✅ Concluído |
 | Botão Excluir no HistoricoDetalheModal: visível só para ADM, confirmação inline, fecha modal após sucesso | ✅ Concluído |
 | Reversão de estoque na exclusão: SaleService::destroy restaura itens; MovementService::destroy reverte quantidade | ✅ Corrigido |
+| Usuários: UserFormModal unificado (criar/editar), confirmação inline de desativação, botão desativar oculto na própria linha do ADM | ✅ Concluído |
+| Backend: toggleActive bloqueia auto-desativação (403); UserService::update protege role do próprio ADM | ✅ Concluído |
 | Fase 5 — Testes + build de produção + instalador .exe | ⏳ Pendente |

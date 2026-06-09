@@ -52,13 +52,22 @@ class UserController extends Controller
         return new UserResource($user);
     }
 
-    public function toggleActive(User $user): UserResource
+    public function toggleActive(User $user): JsonResponse
     {
+        if ($user->id === auth()->id()) {
+            return response()->json([
+                'message' => 'Você não pode desativar sua própria conta.',
+            ], 403);
+        }
+
         $this->authorize('update', $user);
 
-        $user = $this->service->toggleActive($user);
+        $user->update(['active' => !$user->active]);
 
-        return new UserResource($user);
+        return response()->json([
+            'message' => $user->active ? 'Usuário ativado.' : 'Usuário desativado.',
+            'data'    => new UserResource($user),
+        ]);
     }
 
     public function destroy(User $user): JsonResponse

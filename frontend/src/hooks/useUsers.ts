@@ -54,7 +54,12 @@ export function useToggleUserActive() {
       toast.success('Status do usuário atualizado.')
     },
     onError: (error: unknown) => {
-      toast.error(getErrorMessage(error, 'Erro ao atualizar usuário.'))
+      const httpError = error as { response?: { status?: number } }
+      if (httpError?.response?.status === 403) {
+        toast.error('Você não pode desativar sua própria conta.')
+      } else {
+        toast.error(getErrorMessage(error, 'Erro ao alterar status do usuário.'))
+      }
     },
   })
 }

@@ -5,6 +5,7 @@ export interface UserPayload {
   name: string
   username: string
   role: 'adm' | 'operador'
+  active?: boolean
   password?: string
   password_confirmation?: string
 }

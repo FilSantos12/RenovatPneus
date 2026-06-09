@@ -1,45 +1,19 @@
 import { useState } from 'react';
 import { Plus, Edit, UserX, UserCheck, Shield, User as UserIcon, Loader2 } from 'lucide-react';
-import { useUsers, useCreateUser, useToggleUserActive } from '@/hooks/useUsers';
+import { useUsers, useToggleUserActive } from '@/hooks/useUsers';
+import { useAuth } from '../contexts/AuthContext';
+import { UserFormModal } from '../components/Users/UserFormModal';
 import type { User } from '../types';
-import { extractValidationErrors, getFirstError } from '@/lib/errors';
-import { toast } from 'sonner';
 
 export function Usuarios() {
-  const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({
-    name: '',
-    username: '',
-    password: '',
-    password_confirmation: '',
-    role: 'operador' as 'adm' | 'operador',
-  });
-  const [validationErrors, setValidationErrors] = useState<Record<string, string[]>>({});
+  const { user: authUser } = useAuth();
+  const [userParaEditar, setUserParaEditar] = useState<User | null>(null);
+  const [modalCriarAberto, setModalCriarAberto] = useState(false);
+  const [confirmandoToggle, setConfirmandoToggle] = useState<number | null>(null);
 
   const { data, isLoading, isError } = useUsers();
   const users: User[] = data?.data ?? [];
-  const createUser = useCreateUser();
   const toggleActive = useToggleUserActive();
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setValidationErrors({});
-
-    try {
-      await createUser.mutateAsync(formData);
-      setShowForm(false);
-      setFormData({ name: '', username: '', password: '', password_confirmation: '', role: 'operador' });
-    } catch (error) {
-      setValidationErrors(extractValidationErrors(error));
-    }
-  };
-
-  const handleToggleActive = async (user: User) => {
-    const action = user.active ? 'desativar' : 'ativar';
-    if (confirm(`Deseja ${action} o usuário ${user.name}?`)) {
-      await toggleActive.mutateAsync(user.id);
-    }
-  };
 
   if (isLoading) {
     return (
@@ -67,7 +41,7 @@ export function Usuarios() {
           <p className="text-[#2D2D2D]/60">{users.length} usuários cadastrados</p>
         </div>
         <button
-          onClick={() => setShowForm(true)}
+          onClick={() => setModalCriarAberto(true)}
           className="flex items-center gap-2 px-6 py-3 bg-[#F97316] text-white rounded-xl font-medium hover:bg-[#F97316]/90 transition-colors"
         >
           <Plus className="w-5 h-5" />
@@ -160,20 +134,46 @@ export function Usuarios() {
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center justify-center gap-2">
-                      <button className="p-2 text-[#2D2D2D]/60 hover:text-[#F97316] hover:bg-[#F97316]/10 rounded-lg transition-colors">
+                      <button
+                        onClick={() => setUserParaEditar(user)}
+                        className="p-2 text-[#2D2D2D]/60 hover:text-[#F97316] hover:bg-[#F97316]/10 rounded-lg transition-colors"
+                      >
                         <Edit className="w-5 h-5" />
                       </button>
-                      <button
-                        onClick={() => handleToggleActive(user)}
-                        disabled={toggleActive.isPending}
-                        className={`p-2 rounded-lg transition-colors ${
-                          user.active
-                            ? 'text-[#2D2D2D]/60 hover:text-[#EF4444] hover:bg-[#EF4444]/10'
-                            : 'text-[#2D2D2D]/60 hover:text-[#22C55E] hover:bg-[#22C55E]/10'
-                        }`}
-                      >
-                        {user.active ? <UserX className="w-5 h-5" /> : <UserCheck className="w-5 h-5" />}
-                      </button>
+                      {user.id !== authUser?.id && (
+                        confirmandoToggle === user.id ? (
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => {
+                                toggleActive.mutate(user.id)
+                                setConfirmandoToggle(null)
+                              }}
+                              disabled={toggleActive.isPending}
+                              className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+                            >
+                              Confirmar
+                            </button>
+                            <button
+                              onClick={() => setConfirmandoToggle(null)}
+                              className="px-2 py-1 text-xs text-gray-600 hover:text-gray-800"
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setConfirmandoToggle(user.id)}
+                            disabled={toggleActive.isPending}
+                            className={`p-2 rounded-lg transition-colors ${
+                              user.active
+                                ? 'text-[#2D2D2D]/60 hover:text-[#EF4444] hover:bg-[#EF4444]/10'
+                                : 'text-[#2D2D2D]/60 hover:text-[#22C55E] hover:bg-[#22C55E]/10'
+                            }`}
+                          >
+                            {user.active ? <UserX className="w-5 h-5" /> : <UserCheck className="w-5 h-5" />}
+                          </button>
+                        )
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -215,121 +215,61 @@ export function Usuarios() {
             </div>
 
             <div className="flex gap-2">
-              <button className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-[#F5F5F5] text-[#2D2D2D] rounded-xl font-medium hover:bg-[#F97316]/10 hover:text-[#F97316] transition-colors">
+              <button
+                onClick={() => setUserParaEditar(user)}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-[#F5F5F5] text-[#2D2D2D] rounded-xl font-medium hover:bg-[#F97316]/10 hover:text-[#F97316] transition-colors"
+              >
                 <Edit className="w-4 h-4" />
                 Editar
               </button>
-              <button
-                onClick={() => handleToggleActive(user)}
-                disabled={toggleActive.isPending}
-                className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-[#F5F5F5] text-[#2D2D2D] rounded-xl font-medium transition-colors disabled:opacity-50 ${
-                  user.active
-                    ? 'hover:bg-[#EF4444]/10 hover:text-[#EF4444]'
-                    : 'hover:bg-[#22C55E]/10 hover:text-[#22C55E]'
-                }`}
-              >
-                {user.active ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
-                {user.active ? 'Desativar' : 'Ativar'}
-              </button>
+              {user.id !== authUser?.id && (
+                confirmandoToggle === user.id ? (
+                  <div className="flex-1 flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        toggleActive.mutate(user.id)
+                        setConfirmandoToggle(null)
+                      }}
+                      disabled={toggleActive.isPending}
+                      className="flex-1 px-3 py-2 text-sm bg-red-600 text-white rounded-xl hover:bg-red-700 disabled:opacity-50"
+                    >
+                      Confirmar
+                    </button>
+                    <button
+                      onClick={() => setConfirmandoToggle(null)}
+                      className="flex-1 px-3 py-2 text-sm bg-[#F5F5F5] text-[#2D2D2D] rounded-xl hover:bg-gray-200"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setConfirmandoToggle(user.id)}
+                    disabled={toggleActive.isPending}
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-[#F5F5F5] text-[#2D2D2D] rounded-xl font-medium transition-colors disabled:opacity-50 ${
+                      user.active
+                        ? 'hover:bg-[#EF4444]/10 hover:text-[#EF4444]'
+                        : 'hover:bg-[#22C55E]/10 hover:text-[#22C55E]'
+                    }`}
+                  >
+                    {user.active ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
+                    {user.active ? 'Desativar' : 'Ativar'}
+                  </button>
+                )
+              )}
             </div>
           </div>
         ))}
       </div>
 
-      {/* Form Modal */}
-      {showForm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full my-8">
-            <h3 className="text-xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D] mb-6">
-              Cadastrar Novo Usuário
-            </h3>
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-[#2D2D2D] font-medium mb-2">Nome Completo</label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full h-12 px-4 bg-[#F5F5F5] border-2 border-transparent rounded-xl focus:outline-none focus:border-[#F97316] transition-colors"
-                  required
-                />
-                {getFirstError(validationErrors, 'name') && (
-                  <p className="text-[#EF4444] text-sm mt-1">{getFirstError(validationErrors, 'name')}</p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-[#2D2D2D] font-medium mb-2">Nome de Usuário</label>
-                <input
-                  type="text"
-                  value={formData.username}
-                  onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                  className="w-full h-12 px-4 bg-[#F5F5F5] border-2 border-transparent rounded-xl focus:outline-none focus:border-[#F97316] transition-colors"
-                  required
-                />
-                {getFirstError(validationErrors, 'username') && (
-                  <p className="text-[#EF4444] text-sm mt-1">{getFirstError(validationErrors, 'username')}</p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-[#2D2D2D] font-medium mb-2">Senha</label>
-                <input
-                  type="password"
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  className="w-full h-12 px-4 bg-[#F5F5F5] border-2 border-transparent rounded-xl focus:outline-none focus:border-[#F97316] transition-colors"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-[#2D2D2D] font-medium mb-2">Confirmar Senha</label>
-                <input
-                  type="password"
-                  value={formData.password_confirmation}
-                  onChange={(e) => setFormData({ ...formData, password_confirmation: e.target.value })}
-                  className="w-full h-12 px-4 bg-[#F5F5F5] border-2 border-transparent rounded-xl focus:outline-none focus:border-[#F97316] transition-colors"
-                  required
-                />
-                {getFirstError(validationErrors, 'password') && (
-                  <p className="text-[#EF4444] text-sm mt-1">{getFirstError(validationErrors, 'password')}</p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-[#2D2D2D] font-medium mb-2">Nível de Acesso</label>
-                <select
-                  value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value as 'adm' | 'operador' })}
-                  className="w-full h-12 px-4 bg-[#F5F5F5] border-2 border-transparent rounded-xl focus:outline-none focus:border-[#F97316] transition-colors"
-                >
-                  <option value="operador">OPERADOR</option>
-                  <option value="adm">ADM</option>
-                </select>
-              </div>
-
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowForm(false)}
-                  className="flex-1 py-3 bg-[#F5F5F5] text-[#2D2D2D] rounded-xl font-medium hover:bg-gray-200 transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={createUser.isPending}
-                  className="flex-1 py-3 bg-[#F97316] text-white rounded-xl font-medium hover:bg-[#F97316]/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {createUser.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-                  Cadastrar
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+      {(modalCriarAberto || userParaEditar) && (
+        <UserFormModal
+          user={userParaEditar ?? undefined}
+          onClose={() => {
+            setModalCriarAberto(false)
+            setUserParaEditar(null)
+          }}
+        />
       )}
     </div>
   );

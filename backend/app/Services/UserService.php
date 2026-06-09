@@ -22,6 +22,10 @@ class UserService
             unset($data['password']);
         }
 
+        if ($user->id === auth()->id()) {
+            unset($data['role']);
+        }
+
         $user->update($data);
 
         return $user->fresh();
