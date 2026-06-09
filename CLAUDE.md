@@ -104,7 +104,7 @@ frontend/
         ├── contexts/
         │   └── AuthContext.tsx # Sanctum real — chama /api/me no mount, sem localStorage
         ├── components/
-        │   ├── Layout.tsx
+        │   ├── Layout.tsx              # flex flex-col min-h-screen; footer fixo no rodapé com créditos e v1.0.0
         │   ├── Sidebar.tsx         # ordem: Dashboard, Finanças, Estoque, Entrada, Venda, Serviços, Etiquetas, Escanear, Histórico, Usuários
         │   ├── MobileHeader.tsx
         │   ├── MobileDrawer.tsx    # mesma ordem do Sidebar.tsx
@@ -621,4 +621,6 @@ NSSM 2.24 (x64) em `installer/tools/nssm.exe`.
 | Auditoria: GET /finance/summary protegido com `role:adm` — era acessível a qualquer OPERADOR autenticado (`SalePolicy::viewAny` retorna `true` para todos) | ✅ Corrigido |
 | Logs: rotação diária configurada (`LOG_CHANNEL=daily`, `LOG_LEVEL=warning`, `LOG_DAYS=30`) | ✅ Concluído |
 | Logs: rastreabilidade em Auth (login sucesso/falha, logout), Sale, Movement e User | ✅ Concluído |
+| Footer: créditos do desenvolvedor + link portfólio + versão `v1.0.0` em todas as páginas | ✅ Concluído |
+| Versionamento: tag `v1.0.0` no Git + `package.json` atualizado para `1.0.0` | ✅ Concluído |
 | Fase 5 — Testes + build de produção + instalador .exe | ⏳ Pendente |
