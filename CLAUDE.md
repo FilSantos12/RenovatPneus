@@ -1,627 +1,130 @@
 # RenovatPneus — Guia para Claude Code
 
-## O que é este projeto
-
-Sistema web de gestão de estoque de pneus para a **Renovat Pneus**. Projetado para uso em rede interna (localhost): um PC Windows atua como servidor e 2-3 dispositivos na mesma rede Wi-Fi acessam via navegador.
+Sistema web de gestão de estoque de pneus. PC Windows como servidor, 2-3 dispositivos na mesma rede Wi-Fi acessam via navegador.
 
 **Repositório:** `https://github.com/FilSantos12/RenovatPneus`
 
 ---
 
-## Estrutura do monorepo
+## Stack
+
+| Camada | Tecnologia |
+|---|---|
+| Frontend | React 18 + TypeScript + Tailwind v4 + Vite 6 |
+| HTTP / estado | Axios (`withCredentials: true`) + TanStack React Query v5 |
+| Roteamento | React Router v7 — `createBrowserRouter` |
+| Backend | Laravel 11 + PHP 8.2 + Sanctum SPA (cookies httpOnly) |
+| Banco | SQLite — dev e produção (`backend/database/database.sqlite`) |
+| Deploy | `php artisan serve` via NSSM (serviço Windows), porta 8000 |
+| Frontend prod | `backend/public/` — mesma origem, sem proxy |
+
+---
+
+## Estrutura
 
 ```
 RenovatPneus/
-├── frontend/          # React 18 + TypeScript + Tailwind v4
-├── backend/           # Laravel 11 + PHP 8.2 + Sanctum
-├── scripts/           # Scripts BAT de instalação e manutenção Windows
-├── installer/         # Inno Setup (.iss) → gera RenovatPneus-Setup.exe
-└── CLAUDE.md
+├── frontend/src/app/         # páginas, componentes, hooks, services, types
+├── backend/                  # Laravel 11; public/ tem o React buildado
+├── deploy/                   # pacote de distribuição (scripts, config, php.ini, nssm.exe)
+├── installer/tools/nssm.exe  # NSSM 2.24 x64
+├── preparar-app.bat          # empacota backend → Desktop\RenovatPneus_v1.0.0_Instalador\app\
+└── preparar-app-exclude.txt  # exclusões do xcopy (.env, cache, database.sqlite)
 ```
+
+**Arquivos-chave:**
+- `frontend/src/app/types/index.ts` — tipos TypeScript alinhados com a API
+- `frontend/src/lib/` — axios.ts, errors.ts, saleStatus.ts, export.ts
+- `frontend/src/services/` — parse + normalização de decimais (Number())
+- `backend/routes/api.php` — 33 rotas; `web.php` — catch-all SPA
+- `backend/app/Services/` — regras de negócio + transações
+- `deploy/config/php.ini` — extensões habilitadas para produção
 
 ---
 
-## Stack
+## Decisões e armadilhas
 
-### Frontend (`frontend/`)
+**Tipos / API:**
+- IDs são `number` (auto-increment SQLite)
+- Laravel retorna `decimal`/`float` como **string** — normalizar com `Number()` nos services
+- `AuthController::login` retorna `{ user, message }` — usar `data.user`. Demais endpoints: `data.data`
+- Enums sempre lowercase: `adm | operador`, `entrada | saida`, `pendente | pago | cancelado`
 
-| Camada | Tecnologia |
-|---|---|
-| Framework | React 18 + TypeScript |
-| Build | Vite 6 |
-| Estilos | Tailwind CSS v4 |
-| Roteamento | React Router v7 — `createBrowserRouter` |
-| HTTP | Axios — `withCredentials: true` (Sanctum cookies) |
-| Cache/estado | TanStack React Query v5 |
-| Componentes UI | Radix UI + shadcn/ui (`src/app/components/ui/`) |
-| Gráficos | Recharts |
-| Notificações | Sonner (toast) |
-| Formulários | React Hook Form |
-| Animações | Motion (Framer Motion) |
-| Ícones | Lucide React |
-| Scanner câmera | react-zxing v3 |
-| Código de barras | jsbarcode |
-| Impressão | react-to-print v3 |
+**Banco:**
+- `database.sqlite` não é commitado. No instalador, criar arquivo vazio antes do `migrate` — PDO não cria o arquivo, só conecta
+- `lockForUpdate()` + `DB::transaction` em MovementService e SaleService — sem race condition no estoque
+- Exclusão de venda/entrada: sempre reverte o estoque antes do soft-delete
 
-### Backend (`backend/`)
+**Auth / Sanctum:**
+- Login por `username` (não email)
+- `AuthService` bloqueia usuários com `active = false`
+- Logout: `Auth::guard('web')->logout()` — não `Auth::logout()` (lança 500 com Sanctum)
+- `AuthContext` logout: `setUser(null)` em `finally` — deslogado mesmo se backend falhar
 
-| Camada | Tecnologia |
-|---|---|
-| Framework | Laravel 11 |
-| PHP | 8.2 (produção via Laragon) / 8.5 (dev local) |
-| Auth | Laravel Sanctum — SPA mode (cookies httpOnly) |
-| DB dev | SQLite (`backend/database/database.sqlite`) |
-| DB prod | MySQL 8 via Laragon |
-| Deploy | `php artisan serve` via NSSM (serviço Windows) |
+**Frontend prod vs dev:**
+- Dev: Vite proxy `/api` → `localhost:8000` (`VITE_API_URL=''`)
+- Prod: frontend em `backend/public/`, mesma origem — sem proxy, sem URL separada
+- `routes/web.php` tem catch-all que serve `index.html` para o React Router funcionar
 
----
+**Scanner de barcode:**
+- `handleScan` nas páginas Entrada/Saida é **async** — busca por `GET /api/products/barcode/{code}`, não lista local (que tem só 15 itens da página 1)
+- USB/HID: threshold 50ms entre teclas para distinguir leitor de digitação humana
+- Câmera: `result.rawValue.trim()` defensivo; `facingMode: { ideal: 'environment' }`
 
-## Estrutura de arquivos — Frontend
+**Logs:**
+- `LOG_LEVEL=warning` no `.env` NÃO suprime `Log::info()` explícito no código — só filtra logs automáticos do framework
+- Ações logadas: login (sucesso/falha), logout, venda criada/excluída, entrada criada/excluída, usuário criado/status alterado
 
-```
-frontend/
-├── .env                        # VITE_API_URL= (vazio = usa proxy Vite)
-├── .env.example
-├── vite.config.ts              # proxy /api e /sanctum → localhost:8000, host 0.0.0.0
-├── package.json
-└── src/
-    ├── main.tsx                # QueryClientProvider + App + ReactQueryDevtools
-    ├── lib/
-    │   ├── axios.ts            # instância Axios, interceptor 401
-    │   ├── queryClient.ts      # QueryClient (staleTime 5min, retry 1)
-    │   ├── errors.ts           # extractValidationErrors, getFirstError, getErrorMessage
-    │   ├── barcode.ts          # generateBarcodeSVG via jsbarcode
-    │   ├── export.ts           # exportHistoricoToExcel(), exportSaleToExcel(), exportHistoricoToPDF()
-    │   └── saleStatus.ts       # saleStatusLabel(status, paymentMethod) — fonte única do label de status de venda
-    ├── services/
-    │   ├── auth.service.ts     # login (→ data.user), logout, me (→ data.data)
-    │   ├── product.service.ts  # parseProduct(), getNextBarcode() — normaliza decimais para Number
-    │   ├── movement.service.ts
-    │   ├── sale.service.ts     # parseSale() normaliza total/unit_price/subtotal para Number
-    │   ├── service.service.ts  # parseService() normaliza price para Number
-    │   ├── user.service.ts
-    │   ├── dashboard.service.ts
-    │   └── finance.service.ts  # getSummary(period) → FinanceSummary; period: today|month|year
-    ├── hooks/
-    │   ├── useProducts.ts      # inclui useNextBarcode() (staleTime:0, gcTime:0)
-    │   ├── useMovements.ts
-    │   ├── useSales.ts
-    │   ├── useServices.ts
-    │   ├── useUsers.ts
-    │   ├── useDashboard.ts
-    │   ├── useFinance.ts       # useFinanceSummary(period) — staleTime 2min
-    │   └── useBarcodeScan.ts   # captura teclado HID (leitor USB) com buffer + timeout
-    ├── styles/
-    │   ├── index.css
-    │   ├── fonts.css           # Google Fonts (Barlow Condensed + DM Sans)
-    │   ├── tailwind.css
-    │   └── theme.css           # variáveis CSS da paleta
-    └── app/
-        ├── App.tsx             # AuthProvider + RouterProvider + Toaster
-        ├── routes.tsx          # createBrowserRouter com rotas protegidas
-        ├── types/index.ts      # tipos alinhados com API (ver seção de tipos)
-        ├── data/mockData.ts    # mock preservado mas não usado nas páginas
-        ├── contexts/
-        │   └── AuthContext.tsx # Sanctum real — chama /api/me no mount, sem localStorage
-        ├── components/
-        │   ├── Layout.tsx              # min-h-screen; sem footer — créditos ficam apenas na sidebar/drawer
-        │   ├── Sidebar.tsx         # ordem: Dashboard, Finanças, Estoque, Entrada, Venda, Serviços, Etiquetas, Escanear, Histórico, Usuários; créditos v1.0.0 abaixo do botão Sair (oculto quando colapsado)
-        │   ├── MobileHeader.tsx
-        │   ├── MobileDrawer.tsx    # mesma ordem do Sidebar.tsx; créditos v1.0.0 abaixo do botão Sair
-        │   ├── ProtectedRoute.tsx  # exibe spinner enquanto isLoading=true
-        │   ├── BarcodeScanner/
-        │   │   └── BarcodeScanner.tsx  # modal câmera (react-zxing) + USB/HID
-        │   ├── Labels/
-        │   │   └── LabelItem.tsx       # etiqueta 50×30mm com código de barras real
-        │   ├── Products/
-        │   │   └── ProductFormModal.tsx  # modal único criar/editar produto + scanner + barcode preview
-        │   │   └── (view inline em Estoque.tsx)  # modal somente-leitura com detalhes do produto
-        │   ├── Historico/
-        │   │   └── HistoricoDetalheModal.tsx  # modal detalhe entrada/venda; botão "Marcar como pago" (só fiado pendente); botão "Excluir" (só ADM, confirmação inline); exporta tipo HistoricoItem
-        │   ├── Users/
-        │   │   └── UserFormModal.tsx       # modal unificado criar/editar usuário; senha opcional na edição; role desabilitado ao editar o próprio ADM; toggle status visível apenas na edição
-        │   └── ui/                     # shadcn/ui — não editar diretamente
-        └── pages/
-            ├── Login.tsx           # navega via useEffect após isAuthenticated=true
-            ├── Dashboard.tsx       # 5 cards clicáveis, gráfico 7 dias (dados do backend, BRT-aware), atividades unificadas (movements + sales)
-            ├── Estoque.tsx         # CRUD completo: visualizar, cadastro, edição, exclusão (ADM), etiqueta
-            ├── Entrada.tsx         # usa useCreateMovement(), BarcodeScanner integrado
-            ├── Saida.tsx           # usa useCreateSale(), BarcodeScanner integrado
-            ├── Scanner.tsx         # usa productService.findByBarcode() + useCreateMovement(); handleProductScanned async via API (não lista local)
-            ├── Etiquetas.tsx       # LabelsPage: preview, A4/térmica, react-to-print v3
-            ├── Historico.tsx       # entradas + vendas unificadas; filtros tipo/data/busca; modal detalhe; export Excel/PDF
-            ├── Financas.tsx        # useFinanceSummary(period); cards receita/custo/lucro; gráficos Recharts; apenas ADM
-            ├── Servicos.tsx        # usa useServices(), CRUD completo
-            ├── Usuarios.tsx        # usa useUsers(), useToggleUserActive(), UserFormModal; confirmação inline de desativar; botão desativar oculto na linha do próprio ADM — apenas ADM
-            └── AcessoNegado.tsx
-```
+**Decimais:** `parseProduct()`, `parseService()`, `parseSale()` nos services normalizam com `Number()`. Nunca `.toFixed()` direto em valor da API.
 
 ---
 
-## Estrutura de arquivos — Backend
+## Deploy — Instalador Standalone
 
-```
-backend/
-├── app/
-│   ├── Enums/
-│   │   ├── UserRole.php         # adm | operador
-│   │   ├── MovementType.php     # entrada | saida
-│   │   ├── PaymentMethod.php    # dinheiro | cartao_credito | cartao_debito | pix | fiado
-│   │   └── SaleStatus.php       # pendente | pago | cancelado
-│   ├── Exceptions/
-│   │   └── InsufficientStockException.php  # render() → 422
-│   ├── Http/
-│   │   ├── Controllers/Api/
-│   │   │   ├── Controller.php       # base: success(), deleted()
-│   │   │   ├── AuthController.php   # login → { user, message }, logout, me
-│   │   │   ├── DashboardController.php
-│   │   │   ├── FinanceController.php  # GET /finance/summary?period= → receita/custo/lucro/série/fiado
-│   │   │   ├── ProductController.php
-│   │   │   ├── MovementController.php
-│   │   │   ├── ServiceController.php
-│   │   │   ├── SaleController.php
-│   │   │   └── UserController.php
-│   │   ├── Middleware/
-│   │   │   └── CheckRole.php        # alias 'role' em bootstrap/app.php
-│   │   ├── Requests/
-│   │   │   ├── Auth/LoginRequest.php
-│   │   │   ├── User/StoreUserRequest.php
-│   │   │   ├── User/UpdateUserRequest.php
-│   │   │   ├── Product/StoreProductRequest.php
-│   │   │   ├── Product/UpdateProductRequest.php
-│   │   │   ├── Movement/StoreMovementRequest.php
-│   │   │   ├── Service/StoreServiceRequest.php
-│   │   │   ├── Service/UpdateServiceRequest.php
-│   │   │   ├── Sale/StoreSaleRequest.php
-│   │   │   └── Sale/UpdateSaleStatusRequest.php
-│   │   └── Resources/
-│   │       ├── UserResource.php + UserCollection.php
-│   │       ├── ProductResource.php + ProductCollection.php
-│   │       ├── MovementResource.php + MovementCollection.php
-│   │       ├── ServiceResource.php + ServiceCollection.php
-│   │       └── SaleResource.php + SaleCollection.php
-│   ├── Models/
-│   │   ├── User.php
-│   │   ├── Product.php
-│   │   ├── Movement.php
-│   │   ├── Service.php
-│   │   ├── Sale.php
-│   │   ├── SaleItem.php
-│   │   ├── SaleService.php
-│   │   └── BarcodeSequence.php  # generateNext() atômico (lockForUpdate) + peekNext()
-│   ├── Policies/
-│   │   ├── UserPolicy.php
-│   │   ├── ProductPolicy.php
-│   │   ├── MovementPolicy.php   # update: false (imutável); delete: apenas ADM
-│   │   ├── ServicePolicy.php
-│   │   └── SalePolicy.php
-│   └── Services/
-│       ├── AuthService.php      # login por username + check active
-│       ├── ProductService.php   # store() gera barcode automaticamente se vier vazio
-│       ├── MovementService.php  # lockForUpdate() + DB::transaction; destroy() reverte increment de estoque antes de deletar
-│       ├── SaleService.php      # reutiliza MovementService para baixa de estoque; à vista → PAGO+paid_at; fiado → PENDENTE; destroy() restaura estoque por item antes de soft-delete
-│       ├── UserService.php
-│       └── DashboardService.php  # BRT-aware (Carbon whereBetween); gráfico 7 dias agregado no backend; sales_today usa whereHas('items')
-├── database/
-│   ├── migrations/              # 13 migrations (+ barcode_sequences + add_price_cost_to_services)
-│   └── seeders/
-│       ├── DatabaseSeeder.php
-│       ├── UserSeeder.php
-│       ├── ProductSeeder.php
-│       └── ServiceSeeder.php
-├── routes/
-│   └── api.php                  # 33 rotas registradas
-├── config/
-│   ├── app.php                  # business_timezone: env('APP_BUSINESS_TIMEZONE', 'America/Sao_Paulo') — fuso único para queries BRT
-│   └── cors.php                 # supports_credentials: true, allowed_origins: FRONTEND_URL + allowed_origins_patterns: subnet 192.168.1.x:5173
-└── bootstrap/
-    └── app.php                  # statefulApi() + alias 'role'
+**Sem Laragon, sem MySQL.** PHP bundled (zip) + SQLite + NSSM.
+
+### Fluxo do instalar.bat (8 passos)
+1. Extrai `runtime\php.zip` → `C:\RenovatPneus\runtime\php\`
+2. Copia `config\php.ini` → `runtime\php\php.ini` ← **obrigatório** (PHP extrai sem .ini ativo)
+3. Copia `app\` → `C:\RenovatPneus\backend\` (xcopy)
+4. Cria pastas + `icacls` em `storage/` e `bootstrap/cache/`
+5. Configura `.env` (preserva em atualização) + `key:generate`
+6. `type nul > database\database.sqlite` + `migrate --force --seed`
+7. `config:cache` + `route:cache` + `view:cache`
+8. NSSM service (auto-start) + `netsh` firewall porta 8000
+
+### php.ini — extensões habilitadas
+`pdo_sqlite`, `sqlite3`, `openssl`, `mbstring`, `fileinfo`
+> `bcmath`, `xml`, `json`, `tokenizer` são **built-in** no PHP 8.2 — não precisam de `extension=`
+
+### Gerar pacote para o cliente
+```batch
+:: 1. Rodar na raiz do projeto:
+preparar-app.bat
+:: → npm run build → copia dist → backend/public/ → xcopy backend/ → instalador\app\
+
+:: 2. Garantir que runtime\ tenha:
+::    php.zip  (PHP 8.2 Thread Safe x64 — windows.php.net/download)
+::    nssm.exe (já incluído)
+
+:: 3. Entregar pasta ao cliente → instalar.bat como Administrador
 ```
 
----
-
-## Tipos TypeScript (alinhados com a API)
-
-```typescript
-// Roles e enums — sempre lowercase, como o backend retorna
-type UserRole     = 'adm' | 'operador'
-type MovementType = 'entrada' | 'saida'
-type SaleStatus  = 'pendente' | 'pago' | 'cancelado'
-type PaymentMethod = 'dinheiro' | 'cartao_credito' | 'cartao_debito' | 'pix' | 'fiado'
-
-// Campos de produto
-Product.name        // nome de exibição (não "description")
-Product.barcode     // código de barras obrigatório (string, não opcional)
-Product.min_stock   // estoque mínimo (não "minQuantity")
-Product.price_sale  // preço de venda
-Product.price_cost  // preço de custo (opcional)
-Product.low_stock   // boolean calculado pelo backend
-
-// Campos de serviço
-Service.price       // preço cobrado ao cliente
-Service.price_cost  // custo de execução (opcional, usado no cálculo de Lucro em Finanças)
-
-// Campos de movimentação (objeto aninhado)
-Movement.product.name   // não "productName"
-Movement.user.name      // não "operator"
-Movement.created_at     // não "date"
-
-// Campos de venda
-Sale.customer_name      // não "client"
-Sale.payment_method     // não "paymentMethod"
-Sale.user.name          // operador
-Sale.created_at         // não "date"
-```
-
-**Decimais:** O Laravel retorna colunas `decimal`/`float` como **string**. Os services normalizam com `Number()` nas funções `parseProduct()`, `parseService()` (normaliza `price` e `price_cost`) e `parseSale()`. Nunca chamar `.toFixed()` diretamente em valores vindos da API sem `Number()`.
-
-**Login:** `AuthController::login` retorna `{ user: {...}, message: "..." }` — o service usa `data.user`. Os demais endpoints usam o padrão `{ data: {...} }` do `JsonResource` — usam `data.data`.
-
-**ProductPayload** (product.service.ts): inclui `quantity?: number` para quantidade inicial no cadastro. O campo `barcode` **não é enviado no payload de criação** — o backend sempre gera via `BarcodeSequence::generateNext()`. `StoreProductRequest` não aceita o campo `barcode`. O modal de cadastro exibe o preview somente-leitura via `GET /api/products/next-barcode` (`peekNext()`), e após salvar exibe o código real gerado com botão "Imprimir etiqueta".
-
----
-
-## API — Rotas disponíveis (33 total)
-
-| Método | Rota | Auth | Role | Descrição |
-|---|---|---|---|---|
-| GET | `/api/health` | Não | — | Health check |
-| POST | `/api/login` | Não | — | Login por username |
-| POST | `/api/logout` | ✅ | — | Logout |
-| GET | `/api/me` | ✅ | — | Usuário autenticado |
-| GET | `/api/dashboard` | ✅ | — | Resumo do dia |
-| GET | `/api/finance/summary` | ✅ | adm | Resumo financeiro por período (today\|month\|year) |
-| GET/POST | `/api/products` | ✅ | POST: adm | CRUD de produtos |
-| GET | `/api/products/next-barcode` | ✅ | adm | Preview do próximo código RNV (peekNext) |
-| GET | `/api/products/barcode/{barcode}` | ✅ | — | Busca por código de barras |
-| GET/PUT/DELETE | `/api/products/{product}` | ✅ | PUT/DELETE: adm | — |
-| GET/POST | `/api/movements` | ✅ | — | Listagem e criação de movimentações |
-| GET | `/api/movements/{movement}` | ✅ | — | Detalhe da movimentação |
-| DELETE | `/api/movements/{movement}` | ✅ | adm | Exclui entrada e reverte estoque |
-| GET/POST | `/api/services` | ✅ | POST: adm | CRUD de serviços |
-| GET/PUT/DELETE | `/api/services/{service}` | ✅ | PUT/DELETE: adm | — |
-| GET/POST | `/api/sales` | ✅ | — | CRUD de vendas |
-| GET/PUT/DELETE | `/api/sales/{sale}` | ✅ | DELETE: adm | — |
-| PATCH | `/api/sales/{sale}/status` | ✅ | — | Atualizar status da venda |
-| GET/POST | `/api/users` | ✅ | adm | CRUD de usuários |
-| GET/PUT/DELETE | `/api/users/{user}` | ✅ | adm | — |
-| PATCH | `/api/users/{user}/toggle-active` | ✅ | adm | Ativar/desativar usuário |
-
-### Arquitetura em camadas
-
-```
-Request → Route → Middleware (auth:sanctum, role)
-       → Controller (fino, ≤10 linhas/método)
-       → FormRequest (valida)
-       → Service (regra de negócio, transações)
-       → Model → Resource (formata JSON)
-```
-
-### Regras de negócio importantes
-
-- **Estoque:** `MovementService` usa `lockForUpdate()` + `DB::transaction` — sem race condition
-- **Venda:** `SaleService::store` reutiliza `MovementService` para dar baixa por item
-- **Status inicial da venda:** `SaleService::store` — `payment_method=fiado` → `status=PENDENTE, paid_at=null`; qualquer outro método (à vista) → `status=PAGO, paid_at=now()`
-- **Quitar fiado:** `PATCH /api/sales/{sale}/status` com `{ status: 'pago' }` → `SaleService::updateStatus` seta `paid_at=now()`. Policy: ADM pode qualquer venda; operador só as próprias
-- **Estoque insuficiente:** lança `InsufficientStockException` → resposta 422 automática
-- **Movimentação imutável:** `MovementPolicy` retorna `false` para `update`; `delete` é permitido apenas para ADM
-- **Exclusão de venda (ADM):** `SaleService::destroy` carrega `items`, incrementa o estoque de cada produto e só então faz o soft-delete — tudo em `DB::transaction`
-- **Exclusão de entrada (ADM):** `MovementService::destroy` usa `lockForUpdate()` para reverter o `increment` do produto e deleta o registro — tudo em `DB::transaction`
-- **Usuário desativado:** `AuthService` verifica `active = true` no login
-- **Barcode interno:** `BarcodeSequence::generateNext()` usa `lockForUpdate()` — sem duplicatas; `peekNext()` só lê (preview sem reservar)
-- **Dashboard timezone:** queries usam `Carbon::now('America/Sao_Paulo')->startOfDay()->setTimezone('UTC')` — fuso centralizado em `config('app.business_timezone')`; NÃO alterar `app.timezone` (armazenamento UTC)
-- **Dashboard gráfico:** 7 dias agregados no backend (`DashboardService::getWeeklyChart`) — evita truncamento por paginação da API
-- **Dashboard `sales_today`:** usa `whereHas('items')` — conta apenas vendas com produtos; venda exclusiva de serviço não entra neste contador
-- **Dashboard `services_today`:** soma `SaleService::whereDate('created_at')->sum('quantity')` — conta todos os serviços executados independente da venda ter produtos
-- **FinanceController:** conta todas as vendas não-canceladas (PAGO + PENDENTE) para receita/custo/lucro. Retorna `service_cost` (soma de `Service.price_cost * quantity`). Fórmula: `profit = revenue - cost - service_cost`
-- **Fiado alert:** `fiado_count/fiado_total` buscados globalmente (sem filtro de período) — vendas com `payment_method=fiado` e `status=pendente`
-- **Label de status:** `saleStatusLabel(status, paymentMethod)` em `src/lib/saleStatus.ts` — fonte única: `cancelado→'cancelado'`, `pago→'pago'`, `pendente+fiado→'fiado'`, `pendente+outro→'pendente'`
-- **Histórico unificado:** `HistoricoItem` une movimentos de entrada + vendas; saídas de estoque não aparecem (são redundantes com as vendas)
-
----
-
-## Logs e rastreabilidade
-
-### Configuração (`.env`)
-
-```ini
-LOG_CHANNEL=daily      # arquivo rotacionado por dia
-LOG_LEVEL=warning      # grava: warning, error, critical, alert, emergency
-LOG_DAYS=30            # mantém 30 arquivos; descarta os mais antigos
-```
-
-Arquivos em `backend/storage/logs/laravel-YYYY-MM-DD.log`.
-
-> `Log::info()` chamado explicitamente no código **sempre é gravado**, independente do `LOG_LEVEL=warning` — esse nível só filtra logs automáticos do framework (queries SQL, boot, etc.).
-
-### Ações logadas
-
-| Controller | Método | Nível | Evento |
-|---|---|---|---|
-| `AuthController` | `login` (sucesso) | `info` | `Login realizado` — `user_id`, `username`, `ip` |
-| `AuthController` | `login` (falha) | `warning` | `Tentativa de login falhou` — `username`, `ip` |
-| `AuthController` | `logout` | `info` | `Logout realizado` — `user_id`, `username` |
-| `SaleController` | `store` | `info` | `Venda criada` — `sale_id`, `user_id`, `user_name`, `total`, `payment` |
-| `SaleController` | `destroy` | `warning` | `Venda excluída` — `sale_id`, `user_id`, `user_name`, `total` |
-| `MovementController` | `store` | `info` | `Entrada de estoque registrada` — `movement_id`, `product_id`, `quantity`, `user_id`, `user_name` |
-| `MovementController` | `destroy` | `warning` | `Entrada de estoque excluída` — `movement_id`, `product_id`, `user_id`, `user_name` |
-| `UserController` | `store` | `info` | `Usuário criado` — `new_user_id`, `new_username`, `role`, `created_by` |
-| `UserController` | `toggleActive` | `warning` | `Status de usuário alterado` — `target_user_id`, `target_username`, `active`, `changed_by` |
-
-### Nota sobre falha de login
-
-`AuthService::login()` lança `AuthenticationException`. O `AuthController::login` captura, loga e re-lança — o Laravel continua retornando o 401 normalmente.
-
----
-
-## Autenticação
-
-Login por **username** (não email). Email existe na tabela mas não é usado no login.
-
-**Fluxo Sanctum SPA:**
-1. `GET /sanctum/csrf-cookie` — obtém cookie CSRF
-2. `POST /api/login` — autentica, cria sessão
-3. Todas as requisições subsequentes enviam cookie de sessão automaticamente (`withCredentials: true`)
-4. `AuthContext` chama `/api/me` ao montar para restaurar sessão existente
-5. Interceptor 401 redireciona para `/` — exceto quando já em `/` (evita loop no mount)
-
-**Credenciais de teste:**
-
-| Username | Senha | Papel |
-|---|---|---|
-| `admin` | `password` | adm |
-| `operador1` | `password` | operador |
-| `operador2` | `password` | operador |
-
-**Papéis:**
-- `adm` — acesso total (usuários, finanças, exportações)
-- `operador` — estoque, movimentações, serviços
-
----
-
-## Banco de dados — Tabelas
-
-| Tabela | SoftDeletes | Observação |
-|---|---|---|
-| `users` | ✅ | Campo `username` único; `active` para desativar sem deletar |
-| `products` | ✅ | `barcode` único + indexado; nullable no store (gerado se vazio) |
-| `movements` | ❌ | ADM pode excluir via `DELETE /api/movements/{id}`; exclusão sempre reverte o estoque do produto |
-| `services` | ✅ | Campo `price_cost` nullable — custo de execução, usado no cálculo de lucro em Finanças |
-| `sales` | ✅ | |
-| `sale_items` | ❌ | Registro financeiro — nunca apaga |
-| `sale_services` | ❌ | Registro financeiro — nunca apaga |
-| `barcode_sequences` | ❌ | Sempre 1 registro — contador global dos códigos RNV-XXXXXX |
-
----
-
-## Roteamento (Frontend)
-
-Usa **`createBrowserRouter`**. O Vite dev server serve o `index.html` para todas as rotas em desenvolvimento.
-
-| Rota | Componente | Proteção |
-|---|---|---|
-| `/` | Login | — |
-| `/dashboard` | Dashboard | Autenticado |
-| `/financas` | Financas | Autenticado (sidebar: só adm) |
-| `/estoque` | Estoque | Autenticado |
-| `/entrada` | Entrada | Autenticado |
-| `/saida` | Saida | Autenticado (label sidebar: **Venda**) |
-| `/servicos` | Servicos | Autenticado |
-| `/etiquetas` | Etiquetas | Autenticado |
-| `/scanner` | Scanner | Autenticado |
-| `/historico` | Historico | Autenticado |
-| `/usuarios` | Usuarios | `requiredRole="adm"` |
-| `/acesso-negado` | AcessoNegado | — |
-
----
-
-## Scanner de código de barras
-
-### Modo USB/HID (leitor físico)
-O hook `useBarcodeScan` captura teclado com buffer + timeout de 100ms e threshold de velocidade de **50ms** entre teclas — só acumula no buffer se `timeSinceLast < 50ms` ou buffer já iniciado. Isso distingue o leitor USB (muito rápido) de digitação humana. Input oculto com `autoFocus` obrigatório.
-
-### Modo câmera (react-zxing v3)
-```typescript
-// API v3 — usa result.rawValue.trim(); câmera traseira preferida; onError para NotAllowedError/NotFoundError
-const { ref } = useZxing({
-  onDecodeResult: (result) => handleScan(result.rawValue.trim()),  // .trim() defensivo
-  paused: mode !== 'camera',
-  constraints: { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } },
-  onError: (error) => { /* exibe mensagem + fallback manual */ },
-})
-```
-
-### Distinção de viewport
-`BarcodeScanner` detecta viewport ao montar (`window.innerWidth < 1024`):
-- **Mobile**: modo inicial = câmera; botão Câmera visível (`lg:hidden`); viewfinder + campo manual abaixo
-- **Desktop**: modo inicial = USB; botão USB visível (`hidden lg:flex`); campo texto + instrução
-
-### Cooldown anti-duplicata + feedback
-`lastScanRef` com reset de 2 segundos evita disparo duplo. Pós-leitura: borda do viewfinder fica verde por 1s e `navigator.vibrate?.(200)` dispara.
-
-### Busca de produto por barcode — fluxo pós-scan
-`handleScan` em `Entrada.tsx` e `Saida.tsx` é **async** e chama `productService.findByBarcode(barcode)` (GET `/api/products/barcode/{code}`) em vez de fazer `products.find()` local. Isso garante que qualquer produto seja encontrado independente da paginação (a lista local tem apenas 15 itens da página 1). O estado `isSearching` desabilita o botão de escanear durante a busca API e exibe spinner `Buscando produto...`.
-
-### UX pós-scan — Entrada
-Após produto encontrado: auto-scroll via `formRef.current?.scrollIntoView()` com delay 150ms leva diretamente para a seção "2. Dados da Entrada". Card verde exibe `↓ Preencha os dados abaixo para confirmar`.
-
-### UX pós-scan — Saida
-Card do produto exibe dois botões:
-- **`+ Carrinho`** (outline): adiciona ao carrinho + auto-scroll via `confirmRef` para "4. Confirmar Saída"
-- **`Adicionar e Confirmar ↓`** (filled): mesma ação, label mais explícito para fluxo de item único
-
-Badge fixo `fixed bottom-4` aparece quando `cartItems.length + cartServices.length > 0`, mostrando contagem e acionando scroll para a seção de confirmação ao clicar. `validationErrors` é capturado e limpo corretamente no submit (era descartado antes).
-
-### HTTPS — acesso LAN (celular)
-`@vitejs/plugin-basic-ssl` em `vite.config.ts` habilita HTTPS no Vite dev server.
-No primeiro acesso pelo celular aceitar o aviso de certificado não confiável (Avançado → Continuar).
-**Variáveis obrigatórias no `.env` do backend para HTTPS funcionar:**
-```ini
-SESSION_SECURE_COOKIE=true
-SANCTUM_STATEFUL_DOMAINS=localhost:5173,localhost:3000,<IP_DO_SERVIDOR>:5173
-FRONTEND_URL=https://localhost:5173
-```
-`cors.php` usa padrão `#^https?://192\.168\.1\.\d+:5173$#` (aceita HTTP e HTTPS).
-
----
-
-## Impressão de etiquetas
-
-### react-to-print v3
-```typescript
-// API v3 — contentRef direto (não content: () => ref.current)
-const handlePrint = useReactToPrint({
-  contentRef: printRef,
-  pageStyle: `@page { size: A4; margin: 10mm; }`,
-})
-// retorna função, não { handlePrint }
-handlePrint()
-```
-
-### Tamanhos suportados
-- **A4:** grid automático de etiquetas 50×30mm (189×113px a 96dpi)
-- **Térmica:** `@page { size: 50mm 30mm; margin: 0; }`
-
-### Atalho do Estoque
-Botão de impressora na listagem navega para `/etiquetas` com `state: { productId }`. A página de etiquetas lê o `location.state` no `useEffect` e pré-carrega o produto.
-
----
-
-## Design system
-
-### Paleta (`frontend/src/styles/theme.css`)
-
-| Variável | Hex | Uso |
-|---|---|---|
-| `--renovat-black` | `#111111` | Sidebar, textos principais |
-| `--renovat-orange` | `#F97316` | Ações, destaques, item ativo no menu |
-| `--renovat-gray-light` | `#F5F5F5` | Fundo geral |
-| `--renovat-gray-dark` | `#2D2D2D` | Textos secundários |
-| `--renovat-success` | `#22C55E` | Entradas, estoque OK |
-| `--renovat-danger` | `#EF4444` | Saídas, estoque zerado |
-| `--renovat-warning` | `#FBBF24` | Estoque baixo |
-
-### Tipografia
-- **Títulos:** `font-['Barlow_Condensed']` bold
-- **Corpo:** `DM Sans` via `var(--font-body)`
-
-### Padrões de componentes
-- Botões: `border-radius: 12px`, altura mínima `48px`
-- Cards: `border-radius: 16px`, padding `24px`
-- Área de toque mínima: `48×48px`
-
----
-
-## Comandos
-
-### Frontend
-
-```bash
-cd frontend
-npm install
-npm run dev      # localhost:5173 (acessível na rede: 0.0.0.0:5173)
-npm run build    # gera frontend/dist/
-```
-
-### Backend
-
-```bash
-cd backend
-composer install
-php artisan serve --host=0.0.0.0 --port=8000
-
-# Banco de dados
-php artisan migrate:fresh --seed   # recria tudo + popula
-php artisan migrate                # só novas migrations
-php artisan db:seed --class=UserSeeder
-
-# Cache (produção)
-php artisan config:cache
-php artisan route:cache
-```
-
-### Acesso em rede LAN (celular / outros PCs)
-
-O frontend já ouve em `0.0.0.0:5173` (vite.config.ts). Para que outros dispositivos na mesma rede consigam autenticar, o `.env` do backend precisa de:
-
-```ini
-SESSION_DOMAIN=                          # vazio — cookie aplica ao host que respondeu
-SANCTUM_STATEFUL_DOMAINS=localhost:5173,localhost:3000,<IP_DO_SERVIDOR>:5173
-```
-
-O `cors.php` já aceita qualquer IP no subnet `192.168.1.x:5173` via `allowed_origins_patterns`.
-Após editar o `.env`, execute `php artisan config:clear` e reinicie o servidor.
-
----
-
-## Deploy — Laragon + NSSM
-
-O sistema roda localmente no Windows com Laragon (PHP 8.2 + MySQL 8).
-O servidor Laravel é registrado como serviço Windows via NSSM.
-
-**Scripts em `scripts/`:**
-- `install-service.bat` — registra o serviço (requer Admin)
-- `uninstall-service.bat` — remove o serviço (requer Admin)
-- `primeiro-uso.bat` — key:generate + migrate + seed + config:cache
-- `backup.bat` — mysqldump para `C:\RenovatPneus\backups\`
-- `setup-backup-task.bat` — agenda backup diário às 23:00 (requer Admin)
-- `abrir-sistema.bat` — abre http://localhost no navegador
-
-**Instalador:** `installer/renovat-pneus.iss` → compilar com Inno Setup → `RenovatPneus-Setup-v1.0.0.exe`
-O instalador verifica se o Laragon está instalado antes de prosseguir.
-NSSM 2.24 (x64) em `installer/tools/nssm.exe`.
+**Pacote pronto em:** `Desktop\RenovatPneus_v1.0.0_Instalador\` (app 58.9 MB + php.zip 34 MB + nssm.exe)
+**URL cliente:** `http://localhost:8000` | `http://<IP-LAN>:8000`
+**Credenciais iniciais:** `admin` / `password`
 
 ---
 
 ## Estado do projeto
 
-| Fase | Status |
+| Área | Status |
 |---|---|
-| Fase 0 — Reorganização monorepo | ✅ Concluída |
-| Fase 1 — Backend (Laravel, migrations, models, seeders) | ✅ Concluída |
-| Infra — Laragon + NSSM + Inno Setup | ✅ Concluída |
-| Login por username | ✅ Concluído |
-| Fase 2 — API REST (32 rotas, services, policies, resources) | ✅ Concluída |
-| Fase 3 — Integração frontend ↔ backend (Axios + React Query + Sanctum) | ✅ Concluída |
-| Fase 4 — Scanner de código de barras + Impressão de etiquetas | ✅ Concluída |
-| CRUD completo da página Estoque (visualizar, cadastro, edição, exclusão ADM) | ✅ Concluído |
-| Geração automática de barcode interno (RNV-XXXXXX, sequencial atômico) | ✅ Concluído |
-| Sidebar reordenada + "Saída" renomeada para "Venda" | ✅ Concluído |
-| Dashboard: 5 cards clicáveis, serviços no gráfico e lista unificada | ✅ Concluído |
-| Finanças: endpoint real, cards receita/custo/lucro, gráficos Recharts, alerta fiado | ✅ Concluído |
-| Histórico: lista unificada entradas+vendas, filtros, modal detalhe, export Excel/PDF | ✅ Concluído |
-| Finanças: 4 cards (Receita, Custo Produtos, Custo Serviços, Lucro); `price_cost` em Service | ✅ Concluído |
-| Finanças: bug `STATUS_LABEL` — `pendente` exibia "fiado" incorretamente | ✅ Corrigido |
-| Dashboard: bug de timezone — queries usavam UTC em vez de BRT (whereBetween + Carbon) | ✅ Corrigido |
-| Dashboard: gráfico 7 dias agregado no backend (evita truncamento por paginação) | ✅ Corrigido |
-| Histórico + Finanças: `saleStatusLabel` unificada em `src/lib/saleStatus.ts` | ✅ Concluído |
-| Vendas à vista (pix/dinheiro/cartão) nascem com `status=pago` e `paid_at` preenchido | ✅ Concluído |
-| Histórico: botão "Marcar como pago" no modal para quitar fiado pendente | ✅ Concluído |
-| Acesso LAN: SESSION_DOMAIN vazio + SANCTUM_STATEFUL_DOMAINS + cors subnet 192.168.1.x | ✅ Concluído |
-| HTTPS LAN: @vitejs/plugin-basic-ssl + SESSION_SECURE_COOKIE=true + cors https? | ✅ Concluído |
-| Scanner mobile: câmera traseira, onError, feedback visual/vibração, distinção viewport | ✅ Concluído |
-| Scanner.tsx: substituído mock por BarcodeScanner real | ✅ Concluído |
-| useBarcodeScan: threshold 50ms para distinguir leitor USB de digitação humana | ✅ Concluído |
-| Cadastro produto: barcode somente-leitura, gerado no backend, tela de sucesso pós-criação | ✅ Concluído |
-| Entrada/Saida: handleScan async via GET /api/products/barcode/{code} — não mais limitado a 15 produtos | ✅ Concluído |
-| Entrada: auto-scroll + indicador "↓ Preencha os dados abaixo" após scan | ✅ Concluído |
-| Saida: dois botões no card (+ Carrinho / Adicionar e Confirmar ↓) + auto-scroll + badge fixo | ✅ Concluído |
-| Saida: validationErrors capturado corretamente no catch (era descartado) | ✅ Corrigido |
-| BarcodeScanner: rawValue.trim() defensivo na leitura da câmera | ✅ Concluído |
-| Exclusão de venda restrita ao ADM: SalePolicy + SaleController (já existiam) | ✅ Concluído |
-| Exclusão de entrada restrita ao ADM: MovementPolicy::delete → ADM; MovementController::destroy criado; rota DELETE registrada | ✅ Concluído |
-| Botão Excluir no HistoricoDetalheModal: visível só para ADM, confirmação inline, fecha modal após sucesso | ✅ Concluído |
-| Reversão de estoque na exclusão: SaleService::destroy restaura itens; MovementService::destroy reverte quantidade | ✅ Corrigido |
-| Usuários: UserFormModal unificado (criar/editar), confirmação inline de desativação, botão desativar oculto na própria linha do ADM | ✅ Concluído |
-| Backend: toggleActive bloqueia auto-desativação (403); UserService::update protege role do próprio ADM | ✅ Concluído |
-| Auditoria: AuthController logout corrigido — `Auth::guard('web')->logout()` (era `Auth::logout()` que lançava 500 no Sanctum) | ✅ Corrigido |
-| Auditoria: AuthContext logout com try/catch — `setUser(null)` movido para `finally` (usuário deslogado do frontend mesmo se o backend falhar) | ✅ Corrigido |
-| Auditoria: Scanner.tsx busca via API — `handleProductScanned` usa `productService.findByBarcode()` em vez de `products.find()` local (era limitado a 15 itens) | ✅ Corrigido |
-| Auditoria: Scanner.tsx handleConfirm com try/catch — `handleReset()` só chamado no sucesso; estado preservado em caso de erro | ✅ Corrigido |
-| Auditoria: GET /finance/summary protegido com `role:adm` — era acessível a qualquer OPERADOR autenticado (`SalePolicy::viewAny` retorna `true` para todos) | ✅ Corrigido |
-| Logs: rotação diária configurada (`LOG_CHANNEL=daily`, `LOG_LEVEL=warning`, `LOG_DAYS=30`) | ✅ Concluído |
-| Logs: rastreabilidade em Auth (login sucesso/falha, logout), Sale, Movement e User | ✅ Concluído |
-| Footer do Layout removido — créditos consolidados na sidebar/drawer | ✅ Concluído |
-| Versionamento: tag `v1.0.0` no Git + `package.json` atualizado para `1.0.0` | ✅ Concluído |
-| Créditos migrados para sidebar/drawer: abaixo do botão Sair; oculto quando sidebar colapsada | ✅ Concluído |
-| Fase 5 — Testes + build de produção + instalador .exe | ⏳ Pendente |
+| Backend — API REST (33 rotas, services, policies, resources) | ✅ |
+| Frontend — todas as páginas + integração Sanctum | ✅ |
+| Scanner USB/HID + câmera (react-zxing v3) | ✅ |
+| Impressão de etiquetas (react-to-print v3, A4 + térmica) | ✅ |
+| Logs de auditoria (Auth, Sale, Movement, User) | ✅ |
+| Versionamento v1.0.0 + créditos na sidebar/drawer | ✅ |
+| Fase 5 — Instalador standalone (PHP bundled + SQLite + NSSM) | ✅ |
+| Pacote distribúível na Área de Trabalho | ✅ Pronto |
