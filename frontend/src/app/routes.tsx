@@ -8,6 +8,7 @@ import { Saida } from './pages/Saida';
 import { Etiquetas } from './pages/Etiquetas';
 import { Historico } from './pages/Historico';
 import { Usuarios } from './pages/Usuarios';
+import { RelatoriosPage } from './pages/Relatorios/RelatoriosPage';
 import { Financas } from './pages/Financas';
 import { Servicos } from './pages/Servicos';
 import { AcessoNegado } from './pages/AcessoNegado';
@@ -65,6 +66,14 @@ export const router = createBrowserRouter([
       {
         path: '/servicos',
         element: <Servicos />,
+      },
+      {
+        path: '/relatorios',
+        element: (
+          <ProtectedRoute requiredRole="adm">
+            <RelatoriosPage />
+          </ProtectedRoute>
+        ),
       },
       {
         path: '/usuarios',

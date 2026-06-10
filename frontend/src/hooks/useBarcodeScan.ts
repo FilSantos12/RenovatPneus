@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 
 export type ScannerMode = 'camera' | 'usb'
 
@@ -8,55 +8,47 @@ interface UseBarcodeScanOptions {
   enabled?: boolean
 }
 
-const SCANNER_SPEED_THRESHOLD_MS = 50
+const INTER_KEY_THRESHOLD_MS = 80
 
 export function useBarcodeScan({ mode, onScan, enabled = true }: UseBarcodeScanOptions) {
-  const inputRef = useRef<HTMLInputElement>(null)
-  const bufferRef = useRef('')
-  const timerRef = useRef<ReturnType<typeof setTimeout>>()
-  const lastKeyTimeRef = useRef(0)
-
   useEffect(() => {
     if (mode !== 'usb' || !enabled) return
 
-    const input = inputRef.current
-    if (!input) return
-
-    input.focus()
+    let buffer = ''
+    let lastKeyTime = 0
 
     function handleKeyDown(e: KeyboardEvent) {
+      if (e.key.length !== 1 && e.key !== 'Enter') return
+
+      const tag = (e.target as HTMLElement)?.tagName
+      const type = (e.target as HTMLInputElement)?.type
+      const isTextInput =
+        (tag === 'INPUT' && ['text', 'search', 'number', 'email', 'password', ''].includes(type ?? '')) ||
+        tag === 'TEXTAREA'
+
+      if (isTextInput) return
+
       const now = Date.now()
-      const timeSinceLast = now - lastKeyTimeRef.current
-      lastKeyTimeRef.current = now
 
       if (e.key === 'Enter') {
-        const code = bufferRef.current.trim()
-        if (code.length > 0) {
+        const code = buffer.trim()
+        if (code.length >= 4) {
           onScan(code)
-          bufferRef.current = ''
         }
+        buffer = ''
+        lastKeyTime = 0
         return
       }
 
-      if (e.key.length === 1) {
-        // Acumula apenas se a tecla chegou rápido (leitor USB) ou buffer já iniciado
-        const isScannerInput = timeSinceLast < SCANNER_SPEED_THRESHOLD_MS || bufferRef.current.length > 0
-        if (isScannerInput) {
-          bufferRef.current += e.key
-          clearTimeout(timerRef.current)
-          timerRef.current = setTimeout(() => {
-            bufferRef.current = ''
-          }, 100)
-        }
+      if (lastKeyTime > 0 && now - lastKeyTime > INTER_KEY_THRESHOLD_MS) {
+        buffer = ''
       }
+
+      buffer += e.key
+      lastKeyTime = now
     }
 
-    input.addEventListener('keydown', handleKeyDown)
-    return () => {
-      input.removeEventListener('keydown', handleKeyDown)
-      clearTimeout(timerRef.current)
-    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
   }, [mode, enabled, onScan])
-
-  return { inputRef }
 }

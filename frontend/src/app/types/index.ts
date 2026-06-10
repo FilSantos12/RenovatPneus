@@ -101,6 +101,27 @@ export interface ChartDay {
   services: number
 }
 
+export interface EntryReportItem {
+  id: number
+  product_name: string
+  product_barcode: string
+  quantity: number
+  created_at: string
+  user_name: string
+}
+
+export interface SaleReportItem {
+  sale_id: number
+  product_name: string
+  product_barcode: string
+  quantity: number
+  unit_price: number
+  subtotal: number
+  created_at: string
+  payment_method: PaymentMethod
+  user_name: string
+}
+
 export interface DashboardSummary {
   total_products: number
   total_stock: number

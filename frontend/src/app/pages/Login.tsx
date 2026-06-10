@@ -178,14 +178,6 @@ export function Login() {
             </button>
           </form>
 
-          {/* Demo Credentials */}
-          <div className="mt-8 p-4 bg-[#F5F5F5] rounded-xl">
-            <p className="text-sm text-[#2D2D2D]/60 mb-2">Credenciais de demonstração:</p>
-            <div className="space-y-1 text-sm text-[#2D2D2D]">
-              <p><strong>Admin:</strong> admin / password</p>
-              <p><strong>Operador:</strong> operador1 / password</p>
-            </div>
-          </div>
         </div>
       </div>
     </div>

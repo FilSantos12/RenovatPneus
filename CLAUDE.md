@@ -36,7 +36,7 @@ RenovatPneus/
 - `frontend/src/app/types/index.ts` — tipos TypeScript alinhados com a API
 - `frontend/src/lib/` — axios.ts, errors.ts, saleStatus.ts, export.ts
 - `frontend/src/services/` — parse + normalização de decimais (Number())
-- `backend/routes/api.php` — 33 rotas; `web.php` — catch-all SPA
+- `backend/routes/api.php` — 35 rotas; `web.php` — catch-all SPA
 - `backend/app/Services/` — regras de negócio + transações
 - `deploy/config/php.ini` — extensões habilitadas para produção
 
@@ -68,7 +68,7 @@ RenovatPneus/
 
 **Scanner de barcode:**
 - `handleScan` nas páginas Entrada/Saida é **async** — busca por `GET /api/products/barcode/{code}`, não lista local (que tem só 15 itens da página 1)
-- USB/HID: threshold 50ms entre teclas para distinguir leitor de digitação humana
+- USB/HID: listener no **`document`** (não em `<input>` oculto) — funciona independente de qual elemento está focado. Threshold 80ms entre teclas. Ignora eventos em `INPUT[text]` e `TEXTAREA` para não interceptar digitação humana
 - Câmera: `result.rawValue.trim()` defensivo; `facingMode: { ideal: 'environment' }`
 
 **Logs:**
@@ -120,11 +120,12 @@ preparar-app.bat
 
 | Área | Status |
 |---|---|
-| Backend — API REST (33 rotas, services, policies, resources) | ✅ |
+| Backend — API REST (35 rotas, services, policies, resources) | ✅ |
 | Frontend — todas as páginas + integração Sanctum | ✅ |
 | Scanner USB/HID + câmera (react-zxing v3) | ✅ |
-| Impressão de etiquetas (react-to-print v3, A4 + térmica) | ✅ |
+| Impressão de etiquetas (react-to-print v3, A4 + térmica 80×40mm) | ✅ |
 | Logs de auditoria (Auth, Sale, Movement, User) | ✅ |
+| Página Relatórios (entradas + vendas, filtros, export Excel/PDF) — só ADM | ✅ |
 | Versionamento v1.0.0 + créditos na sidebar/drawer | ✅ |
 | Fase 5 — Instalador standalone (PHP bundled + SQLite + NSSM) | ✅ |
 | Pacote distribúível na Área de Trabalho | ✅ Pronto |

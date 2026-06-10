@@ -29,7 +29,7 @@ export function Etiquetas() {
     pageStyle:
       printMode === 'a4'
         ? `@page { size: A4; margin: 10mm; } @media print { body { -webkit-print-color-adjust: exact; } }`
-        : `@page { size: 50mm 30mm; margin: 0; } @media print { body { -webkit-print-color-adjust: exact; } }`,
+        : `@page { size: 80mm 40mm; margin: 0; } @media print { body { -webkit-print-color-adjust: exact; } }`,
   })
 
   // Pré-carregar produto quando navegado via state (botão de etiqueta no Estoque)
@@ -135,7 +135,7 @@ export function Etiquetas() {
               >
                 <option value="" disabled>Ou selecionar da lista...</option>
                 {products.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
+                  <option key={p.id} value={p.id}>{p.name} — {p.barcode}</option>
                 ))}
               </select>
             )}
@@ -202,7 +202,7 @@ export function Etiquetas() {
               {entries.map((entry) => (
                 <div key={entry.product.id} className="flex items-center gap-3">
                   <span className="flex-1 truncate text-sm text-[#2D2D2D]">
-                    {entry.product.name}
+                    {entry.product.name} — {entry.product.barcode}
                   </span>
                   <input
                     type="number"

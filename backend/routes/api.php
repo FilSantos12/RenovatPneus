@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\FinanceController;
 use App\Http\Controllers\Api\MovementController;
 use App\Http\Controllers\Api\ProductController;
+use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\SaleController;
 use App\Http\Controllers\Api\ServiceController;
 use App\Http\Controllers\Api\UserController;
@@ -36,9 +37,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/sales/{sale}/status', [SaleController::class, 'updateStatus']);
     Route::apiResource('sales', SaleController::class);
 
-    // ADM — finanças e usuários
+    // ADM — finanças, relatórios e usuários
     Route::middleware('role:adm')->group(function () {
         Route::get('/finance/summary', [FinanceController::class, 'summary']);
+        Route::get('/reports/entries', [ReportController::class, 'entries']);
+        Route::get('/reports/sales',   [ReportController::class, 'sales']);
         Route::patch('/users/{user}/toggle-active', [UserController::class, 'toggleActive']);
         Route::apiResource('users', UserController::class);
     });

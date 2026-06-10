@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx'
-import type { Sale, Movement } from '@/app/types'
+import type { Sale, Movement, EntryReportItem, SaleReportItem } from '@/app/types'
 
 export function exportHistoricoToExcel(items: Array<{ kind: string; data: any }>) {
   const rows = items.map(item => {
@@ -74,5 +74,53 @@ export function exportSaleToExcel(sale: Sale) {
 }
 
 export function exportHistoricoToPDF() {
+  window.print()
+}
+
+export function exportEntriesToExcel(items: EntryReportItem[], date: string) {
+  const rows = items.map(item => ({
+    'Produto':    item.product_name,
+    'Cód. Barras': item.product_barcode,
+    'Quantidade': item.quantity,
+    'Data/Hora':  new Date(item.created_at).toLocaleString('pt-BR'),
+    'Operador':   item.user_name,
+  }))
+
+  const ws = XLSX.utils.json_to_sheet(rows)
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Entradas')
+  ws['!cols'] = Object.keys(rows[0] ?? {}).map(() => ({ wch: 22 }))
+  XLSX.writeFile(wb, `relatorio-entradas-${date}.xlsx`)
+}
+
+export function exportSalesToExcel(items: SaleReportItem[], date: string) {
+  const paymentLabels: Record<string, string> = {
+    dinheiro: 'Dinheiro',
+    cartao_credito: 'Cartão de Crédito',
+    cartao_debito: 'Cartão de Débito',
+    pix: 'PIX',
+    fiado: 'Fiado',
+  }
+
+  const rows = items.map(item => ({
+    'Venda #':      item.sale_id,
+    'Produto':      item.product_name,
+    'Cód. Barras':  item.product_barcode,
+    'Quantidade':   item.quantity,
+    'Vlr Unit.':    Number(item.unit_price).toFixed(2),
+    'Subtotal':     Number(item.subtotal).toFixed(2),
+    'Data/Hora':    new Date(item.created_at).toLocaleString('pt-BR'),
+    'Pagamento':    paymentLabels[item.payment_method] ?? item.payment_method,
+    'Operador':     item.user_name,
+  }))
+
+  const ws = XLSX.utils.json_to_sheet(rows)
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Vendas')
+  ws['!cols'] = Object.keys(rows[0] ?? {}).map(() => ({ wch: 20 }))
+  XLSX.writeFile(wb, `relatorio-vendas-${date}.xlsx`)
+}
+
+export function exportReportToPDF() {
   window.print()
 }

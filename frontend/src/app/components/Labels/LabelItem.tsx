@@ -22,11 +22,11 @@ export function LabelItem({
     try {
       JsBarcode(barcodeRef.current, product.barcode, {
         format,
-        width: 1.5,
-        height: 40,
+        width: 2,
+        height: 55,
         displayValue: true,
-        fontSize: 10,
-        margin: 2,
+        fontSize: 12,
+        margin: 4,
       })
     } catch {
       // código inválido para o formato — ignora silenciosamente
@@ -36,7 +36,7 @@ export function LabelItem({
   return (
     <div
       className="label-item border border-gray-300 bg-white flex flex-col items-center justify-center p-1"
-      style={{ width: '189px', height: '113px' }}
+      style={{ width: '302px', height: '151px' }}
     >
       {showName && (
         <p className="text-center text-xs font-medium leading-tight mb-1 line-clamp-2 px-1 w-full">

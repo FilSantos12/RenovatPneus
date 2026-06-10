@@ -10,7 +10,8 @@ import {
   Users,
   LogOut,
   DollarSign,
-  Wrench
+  Wrench,
+  BarChart2
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useState, useEffect } from 'react';
@@ -49,8 +50,9 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
     { path: '/servicos',  icon: Wrench,           label: 'Serviços',   roles: ['adm', 'operador'] },
     { path: '/etiquetas', icon: Tag,              label: 'Etiquetas',  roles: ['adm', 'operador'] },
     { path: '/scanner',   icon: Scan,             label: 'Escanear',   roles: ['adm', 'operador'] },
-    { path: '/historico', icon: History,          label: 'Histórico',  roles: ['adm', 'operador'] },
-    { path: '/usuarios',  icon: Users,            label: 'Usuários',   roles: ['adm'] },
+    { path: '/historico',  icon: History,    label: 'Histórico',   roles: ['adm', 'operador'] },
+    { path: '/relatorios', icon: BarChart2,  label: 'Relatórios',  roles: ['adm'] },
+    { path: '/usuarios',   icon: Users,      label: 'Usuários',    roles: ['adm'] },
   ];
 
   const filteredMenuItems = menuItems.filter((item) =>

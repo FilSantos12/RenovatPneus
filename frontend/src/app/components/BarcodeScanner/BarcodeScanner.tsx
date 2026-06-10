@@ -51,7 +51,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
     },
   })
 
-  const { inputRef } = useBarcodeScan({
+  useBarcodeScan({
     mode,
     onScan: handleScan,
     enabled: mode === 'usb',
@@ -151,19 +151,15 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
           {/* USB — apenas desktop (hidden lg:block como segurança adicional) */}
           {mode === 'usb' && (
             <div className="hidden lg:block text-center py-6">
-              <input
-                ref={inputRef}
-                className="opacity-0 absolute w-0 h-0"
-                autoFocus
-                readOnly
-                tabIndex={-1}
-              />
               <div className="w-16 h-16 bg-[#F97316]/10 rounded-full flex items-center justify-center mx-auto mb-3">
                 <Usb className="w-8 h-8 text-[#F97316]" />
               </div>
-              <p className="text-[#2D2D2D] font-medium">Aguardando leitura...</p>
-              <p className="text-[#2D2D2D]/60 text-sm mt-1">
-                Aponte o leitor para o código de barras ou digite abaixo
+              <div className="flex items-center justify-center gap-2 text-sm text-green-600 bg-green-50 border border-green-200 rounded-xl px-3 py-2 mb-3">
+                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse flex-shrink-0" />
+                Scanner USB ativo — aponte o leitor para o código de barras
+              </div>
+              <p className="text-[#2D2D2D]/60 text-sm">
+                Ou digite o código abaixo
               </p>
             </div>
           )}
@@ -181,7 +177,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
                 value={manualCode}
                 onChange={(e) => setManualCode(e.target.value.toUpperCase())}
                 onKeyDown={(e) => e.key === 'Enter' && handleManualSubmit()}
-                placeholder="RNV-000000"
+                placeholder="Ex: RNV-000006"
                 className="flex-1 h-11 px-3 bg-[#F5F5F5] border-2 border-transparent rounded-xl focus:outline-none focus:border-[#F97316] transition-colors text-sm font-mono uppercase"
               />
               <button
