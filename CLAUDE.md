@@ -50,6 +50,13 @@ RenovatPneus/
 - `AuthController::login` retorna `{ user, message }` — usar `data.user`. Demais endpoints: `data.data`
 - Enums sempre lowercase: `adm | operador`, `entrada | saida`, `pendente | pago | cancelado`
 
+**Modelo de lote / Entrada unificada:**
+- Cada produto representa um lote físico com barcode próprio (`RNV-000006` = 20 pneus entrados no dia X). Novos lotes = novo cadastro, não entrada em produto já existente
+- Menu lateral: item "Entrada/Estoque" (rota `/estoque`) — entrada e catálogo unificados. Item isolado "Entrada" foi removido
+- Rota `/entrada` **removida** do router; `Entrada.tsx` existe no disco mas não está em `routes.tsx`
+- Dashboard "Registrar Entrada": `navigate('/estoque', { state: { openModal: true } })`. `Estoque.tsx` lê `location.state?.openModal` no `useEffect`, abre `ProductFormModal` e limpa o state com `window.history.replaceState`
+- `ProductFormModal` título: `'Entrada'` em modo criação, `'Editar Produto'` em modo edição
+
 **Banco:**
 - `database.sqlite` não é commitado. No instalador, criar arquivo vazio antes do `migrate` — PDO não cria o arquivo, só conecta
 - `lockForUpdate()` + `DB::transaction` em MovementService e SaleService — sem race condition no estoque

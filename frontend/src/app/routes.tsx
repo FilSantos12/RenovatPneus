@@ -3,7 +3,6 @@ import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
 import { Scanner } from './pages/Scanner';
 import { Estoque } from './pages/Estoque';
-import { Entrada } from './pages/Entrada';
 import { Saida } from './pages/Saida';
 import { Etiquetas } from './pages/Etiquetas';
 import { Historico } from './pages/Historico';
@@ -42,10 +41,6 @@ export const router = createBrowserRouter([
       {
         path: '/estoque',
         element: <Estoque />,
-      },
-      {
-        path: '/entrada',
-        element: <Entrada />,
       },
       {
         path: '/saida',

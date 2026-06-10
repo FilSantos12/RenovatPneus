@@ -3,7 +3,6 @@ import {
   LayoutDashboard,
   Scan,
   Package,
-  ArrowDownToLine,
   ArrowUpFromLine,
   Tag,
   History,
@@ -44,8 +43,7 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
   const menuItems = [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard',  roles: ['adm', 'operador'] },
     { path: '/financas',  icon: DollarSign,      label: 'Finanças',   roles: ['adm'] },
-    { path: '/estoque',   icon: Package,          label: 'Estoque',    roles: ['adm', 'operador'] },
-    { path: '/entrada',   icon: ArrowDownToLine,  label: 'Entrada',    roles: ['adm', 'operador'] },
+    { path: '/estoque',   icon: Package,          label: 'Entrada/Estoque', roles: ['adm', 'operador'] },
     { path: '/saida',     icon: ArrowUpFromLine,  label: 'Venda',      roles: ['adm', 'operador'] },
     { path: '/servicos',  icon: Wrench,           label: 'Serviços',   roles: ['adm', 'operador'] },
     { path: '/etiquetas', icon: Tag,              label: 'Etiquetas',  roles: ['adm', 'operador'] },

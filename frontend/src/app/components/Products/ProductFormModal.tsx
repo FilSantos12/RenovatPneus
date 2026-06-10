@@ -120,7 +120,7 @@ export function ProductFormModal({ product, onClose }: ProductFormModalProps) {
       <div className="bg-white rounded-2xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-xl">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D]">
-            {isEditing ? 'Editar Produto' : 'Cadastrar Novo Pneu'}
+            {isEditing ? 'Editar Produto' : 'Entrada'}
           </h2>
           <button
             onClick={onClose}

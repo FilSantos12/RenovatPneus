@@ -3,17 +3,34 @@
 namespace App\Services;
 
 use App\Models\BarcodeSequence;
+use App\Models\Movement;
 use App\Models\Product;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class ProductService
 {
     public function store(array $data): Product
     {
-        if (empty($data['barcode'])) {
-            $data['barcode'] = BarcodeSequence::generateNext();
-        }
+        return DB::transaction(function () use ($data) {
+            if (empty($data['barcode'])) {
+                $data['barcode'] = BarcodeSequence::generateNext();
+            }
 
-        return Product::create($data);
+            $product = Product::create($data);
+
+            if ($product->quantity > 0) {
+                Movement::create([
+                    'product_id' => $product->id,
+                    'type'       => 'entrada',
+                    'quantity'   => $product->quantity,
+                    'user_id'    => Auth::id(),
+                    'notes'      => 'Estoque inicial',
+                ]);
+            }
+
+            return $product;
+        });
     }
 
     public function update(Product $product, array $data): Product

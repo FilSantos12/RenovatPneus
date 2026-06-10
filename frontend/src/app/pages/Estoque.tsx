@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Search, Eye, Edit, Printer, Plus, AlertTriangle, Check, Loader2, Trash2, X, Barcode, Tag, Ruler, DollarSign, Package } from 'lucide-react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useLocation } from 'react-router';
 import { useProducts, useDeleteProduct } from '@/hooks/useProducts';
 import type { Product } from '../types';
 import { useAuth } from '../contexts/AuthContext';
@@ -9,6 +9,7 @@ import { ProductFormModal } from '../components/Products/ProductFormModal';
 export function Estoque() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterBrand, setFilterBrand] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
@@ -17,6 +18,13 @@ export function Estoque() {
   const [produtoVisualizando, setProdutoVisualizando] = useState<Product | null>(null);
   const [produtoEditando, setProdutoEditando] = useState<Product | null>(null);
   const [produtoExcluindo, setProdutoExcluindo] = useState<Product | null>(null);
+
+  useEffect(() => {
+    if (location.state?.openModal) {
+      setShowFormModal(true);
+      window.history.replaceState({}, document.title);
+    }
+  }, []);
 
   const { data, isLoading, isError } = useProducts();
   const products: Product[] = data?.data ?? [];
@@ -109,7 +117,7 @@ export function Estoque() {
             className="flex items-center gap-2 px-6 py-3 bg-[#F97316] text-white rounded-xl font-medium hover:bg-[#F97316]/90 transition-colors"
           >
             <Plus className="w-5 h-5" />
-            Cadastrar Novo Pneu
+            Entrada
           </button>
         )}
       </div>

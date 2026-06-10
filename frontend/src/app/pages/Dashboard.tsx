@@ -104,7 +104,7 @@ export function Dashboard() {
         </button>
 
         <button
-          onClick={() => navigate('/entrada')}
+          onClick={() => navigate('/estoque', { state: { openModal: true } })}
           className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 text-left hover:border-[#22C55E] hover:shadow-md transition-all group"
         >
           <div className="mb-4">
@@ -171,7 +171,8 @@ export function Dashboard() {
         </h2>
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           <Link
-            to="/entrada"
+            to="/estoque"
+            state={{ openModal: true }}
             className="flex flex-col items-center gap-3 p-4 rounded-xl border-2 border-[#22C55E] text-[#22C55E] hover:bg-[#22C55E] hover:text-white transition-all group"
           >
             <div className="w-12 h-12 bg-[#22C55E]/10 group-hover:bg-white/20 rounded-xl flex items-center justify-center transition-colors">
