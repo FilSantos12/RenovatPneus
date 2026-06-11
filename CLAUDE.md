@@ -109,17 +109,62 @@ RenovatPneus/
 :: 1. Rodar na raiz do projeto:
 preparar-app.bat
 :: → npm run build → copia dist → backend/public/ → xcopy backend/ → instalador\app\
+:: → também copia deploy/config/ssl_generate.php → instalador\config\
 
 :: 2. Garantir que runtime\ tenha:
-::    php.zip  (PHP 8.2 Thread Safe x64 — windows.php.net/download)
-::    nssm.exe (já incluído)
+::    php.zip       (PHP 8.2 Thread Safe x64 — windows.php.net/download)
+::    nssm.exe      (já incluído)
+::    stunnel\      (estrutura completa — ver abaixo)
 
 :: 3. Entregar pasta ao cliente → instalar.bat como Administrador
 ```
 
-**Pacote pronto em:** `Desktop\RenovatPneus_v1.0.0_Instalador\` (app 58.9 MB + php.zip 34 MB + nssm.exe)
+**Pacote pronto em:** `Desktop\RenovatPneus_v1.0.0_Instalador\`
 **URL cliente:** `http://localhost:8000` | `http://<IP-LAN>:8000`
+**URL câmera (celular):** `https://<IP-LAN>:8443` (aceitar aviso de certificado uma vez)
 **Credenciais iniciais:** `admin` / `password`
+
+### HTTPS para câmera no celular (stunnel)
+
+`getUserMedia` (câmera) exige HTTPS — em `http://IP` o browser bloqueia. Solução: stunnel como proxy TLS na porta 8443.
+
+**Estrutura necessária em `runtime\stunnel\`** (copiar de `C:\Program Files (x86)\stunnel\`):
+```
+runtime\stunnel\
+  bin\   tstunnel.exe, stunnel.exe, libcrypto-3-x64.dll, libssl-3-x64.dll, libssp-0.dll
+  config\ openssl.cnf, fipsmodule.cnf, ca-certs.pem, stunnel.pem
+  engines\ capi.dll, padlock.dll, pkcs11.dll
+  ossl-modules\ fips.dll, legacy.dll, pkcs11prov.dll
+```
+
+**Como popular `runtime\stunnel\`:**
+1. Instalar stunnel (`stunnel-x.xx-win64-installer.exe`) no PC do desenvolvedor
+2. Copiar toda a pasta `C:\Program Files (x86)\stunnel\` → `instalador\runtime\stunnel\` (exceto `doc\` e `uninstall.exe`)
+
+**O que o instalar.bat faz automaticamente:**
+- Detecta `runtime\stunnel\bin\tstunnel.exe` → ativa setup HTTPS
+- xcopy da árvore stunnel → `C:\RenovatPneus\runtime\stunnel\`
+- Roda `config\ssl_generate.php` via PHP bundled → gera `server.crt` + `server.key` + `stunnel.conf`
+- Registra serviço NSSM `RenovatPneusSSL` com `AppDirectory=runtime\stunnel\bin` e `AppEnvironmentExtra=OPENSSL_CONF=...`
+- Abre porta 8443 no firewall
+
+**Armadilhas já resolvidas:**
+- `tstunnel.exe` (headless) — não usar `stunnel.exe` (GUI, não roda como serviço via NSSM)
+- `foreground = yes` é opção Unix-only — não incluir no `stunnel.conf` no Windows
+- `openssl_pkey_export()` no PHP precisa receber `$config` como 4º argumento, senão a chave fica vazia
+- `ssl_generate.php` precisa apontar `'config' => $opensslCnf` para `php/extras/ssl/openssl.cnf` do PHP bundled
+- NSSM `AppEnvironmentExtra` (não `AppEnvironment`) — `AppEnvironment` substitui o ambiente inteiro, stunnel perde PATH e falha
+- xcopy do stunnel sem guard `if not exist` — reinstalações devem sempre sobrescrever
+- Check de existência do stunnel no **source** do instalador (`%~dp0runtime\stunnel\bin\tstunnel.exe`), não no destino
+
+**SANCTUM e sessão via HTTPS:**
+- `SESSION_DOMAIN=` (vazio) — cookie funciona para qualquer host (localhost ou IP)
+- `SANCTUM_STATEFUL_DOMAINS` deve incluir **ambas as portas**: `IP:8000` e `IP:8443`
+- O instalar.bat detecta o IP local e grava no `.env`: `localhost:8000,127.0.0.1:8000,localhost:8443,127.0.0.1:8443,IP:8000,IP:8443`
+- `config:cache` roda **após** a detecção do IP — ordem importa
+
+**Frontend (`BarcodeScanner.tsx`):**
+- `window.isSecureContext` detectado no módulo (fora do componente) — se `false`, exibe aviso âmbar com link `https://IP:8443` clicável e passa `paused: true` para `useZxing` (evita erro no browser)
 
 ---
 
@@ -135,4 +180,5 @@ preparar-app.bat
 | Página Relatórios (entradas + vendas, filtros, export Excel/PDF) — só ADM | ✅ |
 | Versionamento v1.0.0 + créditos na sidebar/drawer | ✅ |
 | Fase 5 — Instalador standalone (PHP bundled + SQLite + NSSM) | ✅ |
+| HTTPS via stunnel (porta 8443) + câmera no celular | ✅ |
 | Pacote distribúível na Área de Trabalho | ✅ Pronto |

@@ -1,7 +1,12 @@
 import { useState, useCallback, useRef } from 'react'
 import { useZxing } from 'react-zxing'
 import { useBarcodeScan, type ScannerMode } from '@/hooks/useBarcodeScan'
-import { Camera, Usb, X, RefreshCw } from 'lucide-react'
+import { Camera, Usb, X, RefreshCw, ShieldAlert } from 'lucide-react'
+
+const isSecureCtx = typeof window !== 'undefined' ? window.isSecureContext : true
+const httpsUrl = !isSecureCtx && typeof window !== 'undefined'
+  ? `https://${window.location.hostname}:8443`
+  : null
 
 interface BarcodeScannerProps {
   onScan: (barcode: string) => void
@@ -31,7 +36,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
 
   const { ref: cameraRef } = useZxing({
     onDecodeResult: (result) => handleScan(result.rawValue.trim()),
-    paused: mode !== 'camera',
+    paused: mode !== 'camera' || !isSecureCtx,
     constraints: {
       video: {
         facingMode: { ideal: 'environment' },
@@ -116,7 +121,25 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
           {/* Câmera — apenas mobile (lg:hidden como segurança adicional) */}
           {mode === 'camera' && (
             <div className="block lg:hidden">
-              {cameraError ? (
+              {!isSecureCtx ? (
+                <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 space-y-2">
+                  <div className="flex items-center gap-2 text-amber-800">
+                    <ShieldAlert className="w-4 h-4 flex-shrink-0" />
+                    <span className="text-sm font-medium">Câmera bloqueada pelo browser</span>
+                  </div>
+                  <p className="text-amber-700 text-sm">
+                    Browsers exigem HTTPS para acessar a câmera. Acesse pelo endereço seguro:
+                  </p>
+                  {httpsUrl && (
+                    <a
+                      href={httpsUrl}
+                      className="block text-[#F97316] font-mono text-sm break-all hover:underline"
+                    >
+                      {httpsUrl}
+                    </a>
+                  )}
+                </div>
+              ) : cameraError ? (
                 <div className="text-center py-4 space-y-3">
                   <p className="text-[#EF4444] text-sm px-2">{cameraError}</p>
                   <button
@@ -166,7 +189,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
 
           {/* Campo manual — sempre visível como fallback universal */}
           <div>
-            {mode === 'camera' && !cameraError && (
+            {mode === 'camera' && isSecureCtx && !cameraError && (
               <p className="text-xs text-[#2D2D2D]/40 text-center mb-2">
                 Ou digite o código manualmente
               </p>

@@ -57,15 +57,26 @@ echo  ================================================
 echo    Pacote pronto!
 echo  ================================================
 echo.
+:: Copiar ssl_generate.php para config do instalador
+copy /Y "%PROJECT%deploy\config\ssl_generate.php" "C:\Users\Admin\Desktop\RenovatPneus_v1.0.0_Instalador\config\ssl_generate.php" >nul
+echo        ssl_generate.php copiado para instalador\config\
+
+echo.
 echo  Checklist para distribuicao:
 echo.
 echo  [OK] app\ copiado para o instalador
+echo  [OK] ssl_generate.php copiado para config\
 echo  [ ]  Baixar PHP 8.2 TS x64 e salvar como:
 echo         Desktop\RenovatPneus_v1.0.0_Instalador\runtime\php.zip
 echo         Link: https://windows.php.net/download/
 echo              (Baixar o ZIP da versao Thread Safe x64)
+echo  [ ]  OPCIONAL — camera no celular (HTTPS):
+echo         Baixar stunnel: https://www.stunnel.org/downloads.html
+echo         Versao: stunnel-x.xx-win64-installer.exe
+echo         Extrair stunnel.exe e salvar em:
+echo           Desktop\RenovatPneus_v1.0.0_Instalador\runtime\stunnel.exe
 echo.
-echo  Apos o php.zip estar no lugar:
+echo  Apos os arquivos estarem no lugar:
 echo  -> O instalador esta pronto para entregar ao cliente!
 echo  -> No cliente: clicar com botao direito em instalar.bat
 echo     e escolher "Executar como administrador"

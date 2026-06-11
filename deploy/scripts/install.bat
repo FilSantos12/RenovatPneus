@@ -13,7 +13,10 @@ set RUNTIME=%INSTALL_DIR%\runtime
 set PHP=%RUNTIME%\php\php.exe
 set NSSM=%RUNTIME%\nssm.exe
 set SERVICE=RenovatPneusAPI
+set SERVICE_SSL=RenovatPneusSSL
 set PORT=8000
+set PORT_SSL=8443
+set HAS_STUNNEL=0
 
 cls
 echo.
@@ -83,6 +86,17 @@ if exist "%TEMP%\renovatpneus_env.bak" (
     echo        Novo .env criado e chave gerada.
 )
 
+:: Detectar IP local e atualizar configuracoes de rede no .env
+for /f "tokens=2 delims=:" %%a in ('ipconfig ^| findstr /i "IPv4"') do (
+    set "IP_TEMP=%%a"
+    set "IP_TEMP=!IP_TEMP: =!"
+    if not "!IP_TEMP!"=="127.0.0.1" set "LOCAL_IP=!IP_TEMP!"
+)
+if not "!LOCAL_IP!"=="" (
+    powershell -NoProfile -Command "$lines = Get-Content '%INSTALL_DIR%\backend\.env'; $lines = $lines -replace '^SESSION_DOMAIN=.*', 'SESSION_DOMAIN='; $lines = $lines -replace '^SANCTUM_STATEFUL_DOMAINS=.*', 'SANCTUM_STATEFUL_DOMAINS=localhost:%PORT%,127.0.0.1:%PORT%,localhost:%PORT_SSL%,127.0.0.1:%PORT_SSL%,!LOCAL_IP!:%PORT%,!LOCAL_IP!:%PORT_SSL%'; $lines = $lines -replace '^APP_URL=.*', 'APP_URL=http://!LOCAL_IP!:%PORT%'; $lines = $lines -replace '^FRONTEND_URL=.*', 'FRONTEND_URL=http://!LOCAL_IP!:%PORT%'; $lines | Set-Content '%INSTALL_DIR%\backend\.env' -Encoding utf8"
+    echo        IP local: !LOCAL_IP! - configuracoes de rede atualizadas.
+)
+
 :: [4/7] Banco de dados
 echo  [4/7] Configurando banco de dados...
 cd /d "%INSTALL_DIR%\backend"
@@ -126,6 +140,42 @@ netsh advfirewall firewall delete rule name="RenovatPneus" >nul 2>&1
 netsh advfirewall firewall add rule name="RenovatPneus" dir=in action=allow protocol=TCP localport=%PORT% >nul 2>&1
 echo        Porta aberta.
 
+:: [+] HTTPS para camera no celular (opcional — requer deploy\runtime\stunnel\)
+set STUNNEL_HOME=%RUNTIME%\stunnel
+set STUNNEL_BIN=!STUNNEL_HOME!\bin\tstunnel.exe
+if exist "%~dp0..\runtime\stunnel\bin\tstunnel.exe" set HAS_STUNNEL=1
+
+if "!HAS_STUNNEL!"=="1" (
+    echo  [+] Configurando HTTPS para camera no celular...
+    xcopy /E /Y /I /Q "%~dp0..\runtime\stunnel" "!STUNNEL_HOME!\" >nul
+    mkdir "%RUNTIME%\ssl" >nul 2>&1
+    copy /Y "%~dp0..\config\ssl_generate.php" "%RUNTIME%\ssl\ssl_generate.php" >nul
+    "%PHP%" "%RUNTIME%\ssl\ssl_generate.php" "%RUNTIME%\ssl" %PORT_SSL% %PORT%
+    "%NSSM%" stop   %SERVICE_SSL% >nul 2>&1
+    "%NSSM%" remove %SERVICE_SSL% confirm >nul 2>&1
+    "%NSSM%" install %SERVICE_SSL% "!STUNNEL_BIN!"
+    "%NSSM%" set %SERVICE_SSL% AppParameters       "%RUNTIME%\ssl\stunnel.conf"
+    "%NSSM%" set %SERVICE_SSL% AppDirectory        "!STUNNEL_HOME!\bin"
+    "%NSSM%" set %SERVICE_SSL% AppEnvironmentExtra "OPENSSL_CONF=!STUNNEL_HOME!\config\openssl.cnf"
+    "%NSSM%" set %SERVICE_SSL% DisplayName      "RenovatPneus HTTPS"
+    "%NSSM%" set %SERVICE_SSL% Description      "Proxy HTTPS para camera no celular - RenovatPneus"
+    "%NSSM%" set %SERVICE_SSL% Start            SERVICE_AUTO_START
+    "%NSSM%" set %SERVICE_SSL% AppStdout        "%INSTALL_DIR%\logs\stunnel.log"
+    "%NSSM%" set %SERVICE_SSL% AppStderr        "%INSTALL_DIR%\logs\stunnel-error.log"
+    "%NSSM%" start %SERVICE_SSL% >nul 2>&1
+    timeout /t 3 /nobreak >nul
+    "%NSSM%" status %SERVICE_SSL% | findstr /i "running" >nul 2>&1
+    if !errorLevel! equ 0 (
+        echo        HTTPS rodando na porta %PORT_SSL%.
+    ) else (
+        echo        AVISO: servico HTTPS nao iniciou. Verifique: %INSTALL_DIR%\logs\stunnel-error.log
+    )
+    netsh advfirewall firewall delete rule name="RenovatPneus HTTPS" >nul 2>&1
+    netsh advfirewall firewall add rule name="RenovatPneus HTTPS" dir=in action=allow protocol=TCP localport=%PORT_SSL% >nul 2>&1
+) else (
+    echo  [i] runtime\stunnel\ nao encontrado — HTTPS nao configurado.
+)
+
 :: Testar se subiu
 echo.
 echo  Aguardando sistema iniciar...
@@ -152,10 +202,18 @@ echo   Acesso pelos celulares (mesma rede Wi-Fi):
 for /f "tokens=2 delims=:" %%a in ('ipconfig ^| findstr /i "IPv4"') do (
     set "IP=%%a"
     set "IP=!IP: =!"
-    if not "!IP!"=="127.0.0.1" echo     http://!IP!:%PORT%
+    if not "!IP!"=="127.0.0.1" (
+        echo     http://!IP!:%PORT%
+        if "!HAS_STUNNEL!"=="1" echo     https://!IP!:%PORT_SSL%  ^(use este para camera^)
+    )
 )
 echo.
 echo   Login: admin  /  Senha: password
 echo   IMPORTANTE: Troque a senha no primeiro acesso!
+if "!HAS_STUNNEL!"=="1" (
+    echo.
+    echo   CAMERA NO CELULAR: use o endereco https:// listado acima.
+    echo   O browser vai mostrar aviso de certificado — clique em "Avancado" e "Continuar".
+)
 echo.
 pause
