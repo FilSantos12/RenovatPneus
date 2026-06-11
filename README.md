@@ -1,137 +1,34 @@
 # RenovatPneus
 
-Sistema web de gestão de estoque de pneus para uso em rede interna (localhost).
+Sistema web de gestão de estoque de pneus para uso em rede interna. Roda inteiramente no PC da loja — sem internet, sem nuvem, sem dependências externas.
 
-**Stack:** React 18 + TypeScript + Tailwind CSS v4 (frontend) · Laravel 11 + PHP 8.2 + MySQL 8 (backend)
-
----
-
-## Estrutura
-
-```
-renovat-pneus/
-├── frontend/          # React + Vite + TypeScript
-├── backend/           # Laravel 11 API REST
-├── scripts/           # Scripts de instalação e manutenção Windows
-├── installer/         # Script Inno Setup para gerar o .exe
-└── README.md
-```
+**Versão:** v1.0.0 · **Status:** Concluído
 
 ---
 
-## Ambiente de Desenvolvimento
+## Stack
 
-### Pré-requisitos
-- [Laragon](https://laragon.org/download/) — instala PHP 8.2 + MySQL 8 + Apache automaticamente
-- Node.js 20+
-
-### Passos
-
-```bash
-# 1. Clonar o repositório (recomendado dentro do www do Laragon)
-# C:\laragon\www\renovat-pneus
-
-# 2. Instalar dependências do backend
-cd backend
-composer install
-
-# 3. Configurar ambiente
-cp .env.example .env
-php artisan key:generate
-
-# 4. Criar o banco no MySQL
-# Abrir Laragon > MySQL > HeidiSQL e executar:
-# CREATE DATABASE renovat_pneus CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-
-# 5. Rodar migrations e seed
-php artisan migrate --seed
-
-# 6. Iniciar o servidor backend
-php artisan serve --host=0.0.0.0 --port=8000
-
-# 7. Em outro terminal — iniciar o frontend
-cd ../frontend
-npm install
-npm run dev
-
-# 8. Acessar http://localhost:5173
-```
+| Camada | Tecnologia |
+|---|---|
+| Frontend | React 18 + TypeScript + Tailwind CSS v4 + Vite 6 |
+| Backend | Laravel 11 + PHP 8.2 + Sanctum (cookies httpOnly) |
+| Banco de dados | SQLite — dev e produção |
+| Scanner | react-zxing v3 (câmera) + USB/HID (leitor externo) |
+| Serviço Windows | NSSM 2.24 (`php artisan serve` como serviço) |
+| HTTPS (câmera) | stunnel — proxy TLS na porta 8443 |
 
 ---
 
-## Build para Deploy (instalador .exe)
+## Funcionalidades
 
-```bash
-# 1. Build do frontend
-cd frontend && npm run build
-# Gera: frontend/dist/
-
-# 2. Otimizar o backend para produção
-cd ../backend
-php artisan config:cache
-php artisan route:cache
-
-# 3. Garantir que o nssm.exe está em installer/tools/
-# Baixar em: https://nssm.cc/download
-
-# 4. Compilar o instalador com o Inno Setup
-# Instalar Inno Setup: https://jrsoftware.org/isdl.php
-# Abrir installer/renovat-pneus.iss e clicar em Build > Compile
-# Resultado: installer/dist/RenovatPneus-Setup-v1.0.0.exe
-```
-
----
-
-## Instalação no PC do cliente
-
-1. Instalar o [Laragon](https://laragon.org/download/) (executar apenas uma vez)
-2. No Laragon, iniciar o MySQL (botão "Start All" ou só MySQL)
-3. Criar o banco de dados `renovat_pneus` no HeidiSQL
-4. Executar o `RenovatPneus-Setup-v1.0.0.exe` como Administrador
-
-O instalador fará automaticamente:
-- Copiar os arquivos do sistema
-- Configurar o banco de dados
-- Registrar o servidor como serviço Windows (inicia com o PC)
-- Configurar backup diário às 23:00
-
----
-
-## Credenciais padrão
-
-| Usuário | Senha | Papel |
-|---|---|---|
-| admin | password | ADM |
-| operador1 | password | OPERADOR |
-| operador2 | password | OPERADOR |
-
-> ⚠️ Trocar as senhas no primeiro acesso!
-
----
-
-## Scripts de manutenção (`scripts/`)
-
-| Script | Descrição | Requer Admin |
-|---|---|---|
-| `abrir-sistema.bat` | Abre o sistema no navegador | Não |
-| `install-service.bat` | Registra o servidor como serviço Windows | Sim |
-| `uninstall-service.bat` | Remove o serviço Windows | Sim |
-| `primeiro-uso.bat` | Configura banco + seed na primeira instalação | Não |
-| `backup.bat` | Gera backup do banco de dados | Não |
-| `setup-backup-task.bat` | Agenda o backup diário às 23:00 | Sim |
-
-> **NSSM** (Non-Sucking Service Manager) é necessário para `install-service.bat` e `uninstall-service.bat`.
-> Baixar em: https://nssm.cc/download e colocar em `installer/tools/nssm.exe`
-
----
-
-## Backups
-
-Os backups automáticos são salvos em `C:\RenovatPneus\backups\` no formato:
-```
-renovat_pneus_YYYY-MM-DD.sql
-```
-Arquivos com mais de 30 dias são removidos automaticamente.
+- **Estoque:** cadastro de lotes de pneus com barcode, controle de quantidade
+- **Movimentações:** entradas e saídas com rastreio completo
+- **Vendas:** registro de vendas com status (pendente / pago / cancelado)
+- **Scanner de barcode:** câmera do celular (HTTPS) ou leitor USB/HID
+- **Impressão de etiquetas:** layout A4 e térmico 80×40mm
+- **Relatórios:** entradas + vendas com filtros e exportação Excel/PDF (só ADM)
+- **Usuários:** gestão de contas com dois papéis (ADM / OPERADOR)
+- **Logs de auditoria:** login, logout, vendas, entradas, usuários
 
 ---
 
@@ -139,5 +36,107 @@ Arquivos com mais de 30 dias são removidos automaticamente.
 
 | Papel | Permissões |
 |---|---|
-| **ADM** | Acesso total — estoque, vendas, serviços, usuários, relatórios |
-| **OPERADOR** | Estoque, movimentações, serviços (sem relatórios e sem gestão de usuários) |
+| **ADM** | Acesso total — estoque, vendas, movimentações, usuários, relatórios |
+| **OPERADOR** | Estoque, movimentações e vendas (sem relatórios, sem gestão de usuários) |
+
+---
+
+## Instalador standalone (cliente)
+
+O instalador não requer Laragon, MySQL ou qualquer software adicional. Tudo é incluído no pacote.
+
+### O que o `instalar.bat` faz automaticamente
+
+1. Extrai o PHP 8.2 bundled em `C:\RenovatPneus\runtime\php\`
+2. Copia os arquivos do sistema em `C:\RenovatPneus\backend\`
+3. Detecta o IP da máquina e configura `.env` (SESSION_DOMAIN, SANCTUM_STATEFUL_DOMAINS, APP_URL)
+4. Cria o banco SQLite e roda migrations + seed
+5. Registra `php artisan serve` como serviço Windows via NSSM (auto-start)
+6. Abre a porta 8000 no firewall
+7. *(Opcional)* Configura stunnel como proxy HTTPS na porta 8443 para câmera no celular
+
+### Uso
+
+```
+instalar.bat   → executar como Administrador
+```
+
+Após a instalação:
+
+| Acesso | URL |
+|---|---|
+| PC da loja | `http://localhost:8000` |
+| Celulares (Wi-Fi) | `http://<IP-LAN>:8000` |
+| Câmera no celular | `https://<IP-LAN>:8443` *(aceitar aviso de certificado)* |
+
+**Credenciais iniciais:** `admin` / `password`
+> Trocar a senha no primeiro acesso.
+
+---
+
+## Desenvolvimento
+
+### Pré-requisitos
+
+- [Laragon](https://laragon.org/download/) com PHP 8.2 e SQLite habilitados
+- Node.js 20+
+
+### Passos
+
+```bash
+# Backend
+cd backend
+composer install
+cp .env.example .env
+php artisan key:generate
+php artisan migrate --seed
+php artisan serve --host=0.0.0.0 --port=8000
+
+# Frontend (outro terminal)
+cd frontend
+npm install
+npm run dev
+# Acessar http://localhost:5173
+```
+
+O Vite proxy redireciona `/api/*` para `localhost:8000` automaticamente.
+
+---
+
+## Gerar pacote para o cliente
+
+```bat
+:: Na raiz do projeto — gera o instalador em Desktop\RenovatPneus_v1.0.0_Instalador\
+preparar-app.bat
+```
+
+O script:
+1. Roda `npm run build` no frontend
+2. Copia o `dist/` para `backend/public/`
+3. Copia o backend para a pasta do instalador (excluindo `.env`, cache, `database.sqlite`)
+4. Copia `deploy/config/ssl_generate.php` para `config/` do instalador
+
+Depois de rodar `preparar-app.bat`, garantir que a pasta `runtime\` do instalador contém:
+- `php.zip` — PHP 8.2 Thread Safe x64 ([windows.php.net](https://windows.php.net/download))
+- `nssm.exe` — já incluído no repositório
+- `stunnel\` — estrutura completa (ver `CLAUDE.md` para detalhes)
+
+---
+
+## Estrutura do repositório
+
+```
+RenovatPneus/
+├── frontend/              # React + Vite + TypeScript
+│   └── src/app/           # páginas, componentes, hooks, services, types
+├── backend/               # Laravel 11 API REST
+│   ├── app/               # Controllers, Services, Models, Resources
+│   ├── routes/            # api.php + web.php (catch-all SPA)
+│   └── public/            # frontend buildado (gerado por preparar-app.bat)
+├── deploy/
+│   ├── config/            # .env.production, php.ini, ssl_generate.php
+│   └── scripts/           # install.bat, uninstall.bat
+├── installer/             # espelho do pacote distribuível
+├── preparar-app.bat       # script de build + empacotamento
+└── CLAUDE.md              # guia técnico completo para desenvolvimento
+```
