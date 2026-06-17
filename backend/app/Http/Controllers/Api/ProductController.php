@@ -29,13 +29,17 @@ class ProductController extends Controller
     {
         $this->authorize('viewAny', Product::class);
 
+        $perPage = max(1, min((int) ($request->per_page ?? 15), 100));
+
         $products = Product::query()
             ->when($request->name, fn ($q, $v) => $q->where('name', 'like', "%{$v}%"))
             ->when($request->brand, fn ($q, $v) => $q->where('brand', 'like', "%{$v}%"))
             ->when($request->size, fn ($q, $v) => $q->where('size', $v))
             ->when($request->boolean('low_stock'), fn ($q) => $q->whereColumn('quantity', '<=', 'min_stock'))
             ->when(! is_null($request->active), fn ($q) => $q->where('active', $request->boolean('active')))
-            ->paginate(15);
+            ->orderBy('created_at', 'desc')
+            ->orderBy('id', 'desc')
+            ->paginate($perPage);
 
         return new ProductCollection($products);
     }

@@ -24,6 +24,7 @@ export function useCreateMovement() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: MOVEMENT_KEYS.all })
       queryClient.invalidateQueries({ queryKey: PRODUCT_KEYS.all })
+      queryClient.invalidateQueries({ queryKey: DASHBOARD_KEYS.summary })
       const label = variables.type === 'entrada' ? 'Entrada' : 'Saída'
       toast.success(`${label} registrada com sucesso!`)
     },

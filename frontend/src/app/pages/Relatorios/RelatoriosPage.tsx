@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { FileSpreadsheet, FileText, Search, BarChart2 } from 'lucide-react'
-import { useEntriesReport, useSalesReport, type ReportFilters } from '@/hooks/useReports'
+import { useEntriesReport, useSalesReport, useServicesReport, type ReportFilters } from '@/hooks/useReports'
 import { useUsers } from '@/hooks/useUsers'
 import { useProducts } from '@/hooks/useProducts'
-import { exportEntriesToExcel, exportSalesToExcel, exportReportToPDF } from '@/lib/export'
-import type { EntryReportItem, SaleReportItem } from '@/app/types'
+import { useServices } from '@/hooks/useServices'
+import { exportEntriesToExcel, exportSalesToExcel, exportServicesToExcel, exportReportToPDF } from '@/lib/export'
+import type { EntryReportItem, SaleReportItem, ServiceReportItem } from '@/app/types'
 
-type Tab = 'entradas' | 'vendas'
+type Tab = 'entradas' | 'vendas' | 'servicos'
 
 const paymentLabels: Record<string, string> = {
   dinheiro: 'Dinheiro',
@@ -14,6 +15,18 @@ const paymentLabels: Record<string, string> = {
   cartao_debito: 'Cartão de Débito',
   pix: 'PIX',
   fiado: 'Fiado',
+}
+
+const statusStyle: Record<string, string> = {
+  pago:      'bg-green-100 text-green-800',
+  pendente:  'bg-yellow-100 text-yellow-800',
+  cancelado: 'bg-gray-100 text-gray-600',
+}
+
+const statusLabel: Record<string, string> = {
+  pago:      'Pago',
+  pendente:  'Pendente',
+  cancelado: 'Cancelado',
 }
 
 const formatDate = (iso: string) =>
@@ -48,15 +61,14 @@ export function RelatoriosPage() {
 
   const [tab, setTab] = useState<Tab>('entradas')
 
-  // Filtros do formulário (não submetidos ainda)
   const [formFilters, setFormFilters] = useState({
     start_date: start,
     end_date: end,
     user_id: '',
     product_id: '',
+    service_id: '',
   })
 
-  // Filtros submetidos — disparam as queries
   const [submitted, setSubmitted] = useState(false)
   const [activeFilters, setActiveFilters] = useState<ReportFilters>({
     start_date: start,
@@ -65,32 +77,47 @@ export function RelatoriosPage() {
 
   const { data: usersData }    = useUsers()
   const { data: productsData } = useProducts()
+  const { data: servicesData } = useServices()
   const users    = (usersData as any)?.data ?? []
   const products = productsData?.data ?? []
+  const services = (servicesData as any)?.data ?? []
 
-  const entriesQuery = useEntriesReport(activeFilters, submitted && tab === 'entradas')
-  const salesQuery   = useSalesReport(activeFilters,   submitted && tab === 'vendas')
+  const entriesQuery  = useEntriesReport(activeFilters,  submitted && tab === 'entradas')
+  const salesQuery    = useSalesReport(activeFilters,    submitted && tab === 'vendas')
+  const servicesQuery = useServicesReport(activeFilters, submitted && tab === 'servicos')
 
-  const entries: EntryReportItem[] = entriesQuery.data?.data ?? []
-  const sales: SaleReportItem[]    = salesQuery.data?.data   ?? []
+  const entries:  EntryReportItem[]   = entriesQuery.data?.data  ?? []
+  const sales:    SaleReportItem[]    = salesQuery.data?.data    ?? []
+  const svcItems: ServiceReportItem[] = servicesQuery.data?.data ?? []
 
-  const isLoading = tab === 'entradas' ? entriesQuery.isFetching : salesQuery.isFetching
+  const isLoading =
+    tab === 'entradas' ? entriesQuery.isFetching :
+    tab === 'vendas'   ? salesQuery.isFetching   :
+    servicesQuery.isFetching
 
   function handleSearch() {
     setActiveFilters({
       start_date: formFilters.start_date,
       end_date:   formFilters.end_date,
-      ...(formFilters.user_id    ? { user_id:    Number(formFilters.user_id) }    : {}),
-      ...(formFilters.product_id ? { product_id: Number(formFilters.product_id) } : {}),
+      ...(formFilters.user_id ? { user_id: Number(formFilters.user_id) } : {}),
+      ...(tab !== 'servicos' && formFilters.product_id ? { product_id: Number(formFilters.product_id) } : {}),
+      ...(tab === 'servicos' && formFilters.service_id ? { service_id: Number(formFilters.service_id) } : {}),
     })
     setSubmitted(true)
   }
 
   const today = new Date().toISOString().slice(0, 10)
 
-  const totalEntryQty   = entries.reduce((s, e) => s + e.quantity, 0)
-  const totalSaleQty    = sales.reduce((s, i) => s + i.quantity, 0)
-  const totalSaleValue  = sales.reduce((s, i) => s + Number(i.subtotal), 0)
+  const totalEntryQty  = entries.reduce((s, e) => s + e.quantity, 0)
+  const totalSaleQty   = sales.reduce((s, i) => s + i.quantity, 0)
+  const totalSaleValue = sales.reduce((s, i) => s + Number(i.subtotal), 0)
+  const totalSvcQty    = svcItems.reduce((s, i) => s + i.quantity, 0)
+  const totalSvcValue  = svcItems.reduce((s, i) => s + Number(i.subtotal), 0)
+
+  const activeCount =
+    tab === 'entradas' ? entries.length :
+    tab === 'vendas'   ? sales.length   :
+    svcItems.length
 
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-6">
@@ -99,12 +126,12 @@ export function RelatoriosPage() {
       <div className="print-header print-only">
         <div>
           <strong>Renovat Pneus</strong>
-          <p>Relatório de {tab === 'entradas' ? 'Entradas' : 'Vendas'}</p>
+          <p>Relatório de {tab === 'entradas' ? 'Entradas' : tab === 'vendas' ? 'Vendas' : 'Serviços'}</p>
         </div>
         <div style={{ textAlign: 'right' }}>
           <p>Emitido em: {new Date().toLocaleString('pt-BR')}</p>
           <p>Período: {formFilters.start_date} a {formFilters.end_date}</p>
-          <p>Total de registros: {tab === 'entradas' ? entries.length : sales.length}</p>
+          <p>Total de registros: {activeCount}</p>
         </div>
       </div>
 
@@ -116,7 +143,7 @@ export function RelatoriosPage() {
             Relatórios
           </h1>
           <p className="text-[#2D2D2D]/60 text-sm mt-1">
-            Relatórios de entradas e vendas por período
+            Relatórios de entradas, vendas e serviços por período
           </p>
         </div>
 
@@ -124,16 +151,17 @@ export function RelatoriosPage() {
           <button
             onClick={() => {
               if (tab === 'entradas') exportEntriesToExcel(entries, today)
-              else exportSalesToExcel(sales, today)
+              else if (tab === 'vendas') exportSalesToExcel(sales, today)
+              else exportServicesToExcel(svcItems, today)
             }}
-            disabled={tab === 'entradas' ? entries.length === 0 : sales.length === 0}
+            disabled={activeCount === 0}
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium bg-green-600 text-white hover:bg-green-700 disabled:opacity-40 transition-colors"
           >
             <FileSpreadsheet size={16} /> Excel
           </button>
           <button
             onClick={exportReportToPDF}
-            disabled={tab === 'entradas' ? entries.length === 0 : sales.length === 0}
+            disabled={activeCount === 0}
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium bg-[#F97316] text-white hover:bg-orange-600 disabled:opacity-40 transition-colors"
           >
             <FileText size={16} /> PDF
@@ -148,6 +176,9 @@ export function RelatoriosPage() {
         </button>
         <button onClick={() => setTab('vendas')} className={tabCls(tab === 'vendas')}>
           Vendas
+        </button>
+        <button onClick={() => setTab('servicos')} className={tabCls(tab === 'servicos')}>
+          Serviços
         </button>
       </div>
 
@@ -185,19 +216,39 @@ export function RelatoriosPage() {
               ))}
             </select>
           </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-gray-500">Produto</label>
-            <select
-              value={formFilters.product_id}
-              onChange={e => setFormFilters(f => ({ ...f, product_id: e.target.value }))}
-              className={`${inputCls} pr-8`}
-            >
-              <option value="">Todos os produtos</option>
-              {products.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-          </div>
+
+          {tab !== 'servicos' && (
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-gray-500">Produto</label>
+              <select
+                value={formFilters.product_id}
+                onChange={e => setFormFilters(f => ({ ...f, product_id: e.target.value }))}
+                className={`${inputCls} pr-8`}
+              >
+                <option value="">Todos os produtos</option>
+                {products.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {tab === 'servicos' && (
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-gray-500">Serviço</label>
+              <select
+                value={formFilters.service_id}
+                onChange={e => setFormFilters(f => ({ ...f, service_id: e.target.value }))}
+                className={`${inputCls} pr-8`}
+              >
+                <option value="">Todos os serviços</option>
+                {services.map((s: any) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <button
             onClick={handleSearch}
             className="flex items-center gap-2 h-10 px-5 bg-[#111111] text-white rounded-xl text-sm font-medium hover:bg-[#2D2D2D] transition-colors"
@@ -360,6 +411,96 @@ export function RelatoriosPage() {
                 </span>
                 <span className="text-gray-500">
                   Valor total: <span className="font-semibold text-[#22C55E]">{formatMoney(totalSaleValue)}</span>
+                </span>
+              </div>
+            </>
+          )}
+        </>
+      )}
+
+      {/* Tabela de Serviços */}
+      {submitted && !isLoading && tab === 'servicos' && (
+        <>
+          {svcItems.length === 0 ? (
+            <div className="bg-white rounded-2xl p-12 border border-gray-100 text-center">
+              <p className="text-sm text-[#2D2D2D]/60">Nenhum registro encontrado para o período selecionado.</p>
+            </div>
+          ) : (
+            <>
+              <div className="hidden lg:block bg-white rounded-2xl border border-gray-100 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="bg-[#111111] text-white">
+                        <th className="px-4 py-3 text-left text-sm font-medium">Serviço</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium">Cliente</th>
+                        <th className="px-4 py-3 text-right text-sm font-medium">Qtd</th>
+                        <th className="px-4 py-3 text-right text-sm font-medium">Vlr Unit.</th>
+                        <th className="px-4 py-3 text-right text-sm font-medium">Subtotal</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium">Pagamento</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium">Data/Hora</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium">Operador</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {svcItems.map((item, idx) => (
+                        <tr key={idx} className="hover:bg-gray-50 border-b border-gray-100 transition-colors">
+                          <td className="py-3 px-4 text-sm text-gray-800">{item.service_name}</td>
+                          <td className="py-3 px-4 text-sm text-gray-700">{item.customer_name ?? '—'}</td>
+                          <td className="py-3 px-4 text-sm text-right text-gray-700">{item.quantity}</td>
+                          <td className="py-3 px-4 text-sm text-right text-gray-700">{formatMoney(item.unit_price)}</td>
+                          <td className="py-3 px-4 text-sm text-right font-medium text-gray-800">{formatMoney(item.subtotal)}</td>
+                          <td className="py-3 px-4 text-sm text-gray-700">
+                            {paymentLabels[item.payment_method] ?? item.payment_method}
+                          </td>
+                          <td className="py-3 px-4 text-xs text-gray-500 whitespace-nowrap">{formatDate(item.created_at)}</td>
+                          <td className="py-3 px-4 text-sm text-gray-700">{item.user_name}</td>
+                          <td className="py-3 px-4">
+                            <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${statusStyle[item.status] ?? 'bg-gray-100 text-gray-600'}`}>
+                              {statusLabel[item.status] ?? item.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Cards mobile — Serviços */}
+              <div className="lg:hidden space-y-3">
+                {svcItems.map((item, idx) => (
+                  <div key={idx} className="bg-white rounded-2xl p-4 border border-gray-100">
+                    <div className="flex justify-between items-start mb-1">
+                      <p className="text-sm font-medium text-gray-800">{item.service_name}</p>
+                      <p className="text-sm font-bold text-gray-800">{formatMoney(item.subtotal)}</p>
+                    </div>
+                    <p className="text-xs text-gray-500">{item.customer_name ?? '—'}</p>
+                    <div className="flex justify-between text-xs text-gray-500 mt-2">
+                      <span>{item.quantity} × {formatMoney(item.unit_price)} · {paymentLabels[item.payment_method] ?? item.payment_method}</span>
+                      <span>{formatDate(item.created_at)}</span>
+                    </div>
+                    <div className="flex items-center justify-between mt-2">
+                      <p className="text-xs text-gray-400">{item.user_name}</p>
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${statusStyle[item.status] ?? 'bg-gray-100 text-gray-600'}`}>
+                        {statusLabel[item.status] ?? item.status}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Totalizador — Serviços */}
+              <div className="bg-white rounded-2xl p-4 border border-gray-100 flex flex-wrap gap-6 text-sm no-print">
+                <span className="text-gray-500">
+                  <span className="font-semibold text-[#2D2D2D]">{svcItems.length}</span> registro{svcItems.length !== 1 ? 's' : ''}
+                </span>
+                <span className="text-gray-500">
+                  Total de unidades: <span className="font-semibold text-[#2D2D2D]">{totalSvcQty}</span>
+                </span>
+                <span className="text-gray-500">
+                  Valor total: <span className="font-semibold text-[#22C55E]">{formatMoney(totalSvcValue)}</span>
                 </span>
               </div>
             </>

@@ -122,6 +122,19 @@ export interface SaleReportItem {
   user_name: string
 }
 
+export interface ServiceReportItem {
+  sale_id: number
+  service_name: string
+  customer_name: string | null
+  quantity: number
+  unit_price: number
+  subtotal: number
+  created_at: string
+  payment_method: PaymentMethod
+  user_name: string
+  status: SaleStatus
+}
+
 export interface DashboardSummary {
   total_products: number
   total_stock: number

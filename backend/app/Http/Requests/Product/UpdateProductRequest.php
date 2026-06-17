@@ -17,7 +17,6 @@ class UpdateProductRequest extends FormRequest
 
         return [
             'name' => ['required', 'string', 'max:255'],
-            'barcode' => ['required', 'string', "unique:products,barcode,{$productId}"],
             'description' => ['nullable', 'string'],
             'brand' => ['nullable', 'string', 'max:100'],
             'size' => ['nullable', 'string', 'max:50'],
@@ -33,8 +32,6 @@ class UpdateProductRequest extends FormRequest
     {
         return [
             'name.required' => 'O nome do produto é obrigatório.',
-            'barcode.required' => 'O código de barras é obrigatório.',
-            'barcode.unique' => 'Este código de barras já está em uso.',
             'price_cost.required' => 'O preço de custo é obrigatório.',
             'price_sale.required' => 'O preço de venda é obrigatório.',
         ];

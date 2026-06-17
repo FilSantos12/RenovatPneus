@@ -37,4 +37,18 @@ class ReportController extends Controller
 
         return response()->json(['data' => $result, 'total' => $result->count()]);
     }
+
+    public function services(Request $request): JsonResponse
+    {
+        $filters = $request->validate([
+            'start_date' => 'required|date',
+            'end_date'   => 'required|date|after_or_equal:start_date',
+            'user_id'    => 'nullable|integer|exists:users,id',
+            'service_id' => 'nullable|integer|exists:services,id',
+        ]);
+
+        $result = $this->service->getServicesReport($filters);
+
+        return response()->json(['data' => $result, 'total' => $result->count()]);
+    }
 }

@@ -6,6 +6,7 @@ export interface ProductFilters {
   brand?: string
   size?: string
   page?: number
+  per_page?: number
 }
 
 export interface PaginatedResponse<T> {

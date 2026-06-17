@@ -13,7 +13,7 @@ Sistema web de gestão de estoque de pneus. PC Windows como servidor, 2-3 dispos
 | Frontend | React 18 + TypeScript + Tailwind v4 + Vite 6 |
 | HTTP / estado | Axios (`withCredentials: true`) + TanStack React Query v5 |
 | Roteamento | React Router v7 — `createBrowserRouter` |
-| Backend | Laravel 11 + PHP 8.2 + Sanctum SPA (cookies httpOnly) |
+| Backend | Laravel 11 + PHP 8.3 + Sanctum SPA (cookies httpOnly) |
 | Banco | SQLite — dev e produção (`backend/database/database.sqlite`) |
 | Deploy | `php artisan serve` via NSSM (serviço Windows), porta 8000 |
 | Frontend prod | `backend/public/` — mesma origem, sem proxy |
@@ -60,18 +60,42 @@ RenovatPneus/
 **Banco:**
 - `database.sqlite` não é commitado. No instalador, criar arquivo vazio antes do `migrate` — PDO não cria o arquivo, só conecta
 - `lockForUpdate()` + `DB::transaction` em MovementService e SaleService — sem race condition no estoque
+- `UpdateProductRequest` **não inclui `barcode`** — barcode é imutável pós-criação e nunca enviado pelo modal de edição. Incluir `barcode` nas regras quebra o `PUT /api/products/{id}` com 422
 - Exclusão de venda/entrada: sempre reverte o estoque antes do soft-delete
+- `BarcodeSequence::generateNext()` usa `do/while` para pular barcodes já existentes (`Product::withTrashed()->where('barcode', ...)->exists()`). Migration `2026_06_16_000001_sync_barcode_sequence` sincroniza `last_sequence` com o maior `RNV-XXXXXX` real do banco — necessária quando `last_sequence` ficou adiantado por rollbacks ou testes
 
 **Auth / Sanctum:**
 - Login por `username` (não email)
 - `AuthService` bloqueia usuários com `active = false`
 - Logout: `Auth::guard('web')->logout()` — não `Auth::logout()` (lança 500 com Sanctum)
 - `AuthContext` logout: `setUser(null)` em `finally` — deslogado mesmo se backend falhar
+- `SESSION_SECURE_COOKIE=false` obrigatório em produção — o sistema serve HTTP puro via LAN; browsers recusam enviar cookies `Secure` em HTTP, quebrando a sessão a cada F5
 
 **Frontend prod vs dev:**
 - Dev: Vite proxy `/api` → `localhost:8000` (`VITE_API_URL=''`)
 - Prod: frontend em `backend/public/`, mesma origem — sem proxy, sem URL separada
 - `routes/web.php` tem catch-all que serve `index.html` para o React Router funcionar
+
+**Relatórios — aba Serviços (`GET /api/reports/services`):**
+- Rota no grupo `role:adm`, igual às abas Entradas e Vendas
+- `ReportService::getServicesReport()` — sem filtro de status (canceladas incluídas, igual à aba Vendas). Filtros opcionais: `user_id`, `service_id`
+- Retorna por item de `SaleService`: `sale_id`, `service_name`, `customer_name`, `quantity`, `unit_price`, `subtotal`, `created_at` (da venda), `payment_method`, `user_name`, `status`
+- Timezone e `whereBetween`: mesmo padrão de `getEntriesReport()` / `getSalesReport()` (`config('app.business_timezone')`, `startOfDay`/`endOfDay` → UTC)
+- Frontend: `useServicesReport` em `hooks/useReports.ts`; `ServiceReportItem` em `types/index.ts`; `exportServicesToExcel` em `lib/export.ts`
+- Select de filtro mostra "Serviço" (lista de `useServices()`) quando `tab === 'servicos'`, "Produto" nas outras abas
+- Totalizador: soma todos os itens inclusive cancelados (mesmo critério da aba Vendas)
+
+**Paginação de produtos (`GET /api/products`):**
+- Resposta é `LengthAwarePaginator` via `ResourceCollection` → `{ data[], links{}, meta{} }`
+- `meta.last_page` e `meta.total` ficam dentro de `meta` — não na raiz. Usar `data?.meta?.last_page`
+- Frontend: `useProducts({ page })` com `placeholderData: keepPreviousData` (evita flicker)
+- Ao criar produto, resetar para `currentPage = 1` (novo produto aparece no topo — ordenação `created_at desc, id desc`)
+
+**Invalidação de cache React Query:**
+- `useCreateProduct.onSuccess` → invalida `PRODUCT_KEYS.all` + `DASHBOARD_KEYS.summary` + `MOVEMENT_KEYS.all`
+- `useCreateMovement.onSuccess` → invalida `MOVEMENT_KEYS.all` + `PRODUCT_KEYS.all` + `DASHBOARD_KEYS.summary`
+- `useCreateSale.onSuccess` → invalida `SALE_KEYS.all` + `PRODUCT_KEYS.all` + `MOVEMENT_KEYS.all` + `DASHBOARD_KEYS.summary` + `['finance']`
+- `FinanceController::summary()` só consulta `Sale` — criar produto/movimento NÃO afeta o financeiro, não invalidar `['finance']` nesses casos
 
 **Scanner de barcode:**
 - `handleScan` nas páginas Entrada/Saida é **async** — busca por `GET /api/products/barcode/{code}`, não lista local (que tem só 15 itens da página 1)
@@ -90,34 +114,88 @@ RenovatPneus/
 
 **Sem Laragon, sem MySQL.** PHP bundled (zip) + SQLite + NSSM.
 
+**PHP bundled: 8.3.31 Thread Safe x64 VS16** (não VS17/8.5+). Build VS16 exige VCRUNTIME 14.20 (qualquer Windows moderno). VS17 exige 14.44 — raro em máquinas sem VS2022, e mesmo com vc_redist instalado a DLL fica pendente de reboot. Incluir `vc_redist.x64.exe` no pacote como fallback.
+
 ### Fluxo do instalar.bat (8 passos)
-1. Extrai `runtime\php.zip` → `C:\RenovatPneus\runtime\php\`
-2. Copia `config\php.ini` → `runtime\php\php.ini` ← **obrigatório** (PHP extrai sem .ini ativo)
-3. Copia `app\` → `C:\RenovatPneus\backend\` (xcopy)
-4. Cria pastas + `icacls` em `storage/` e `bootstrap/cache/`
-5. Configura `.env` (preserva em atualização) + `key:generate`
-6. `type nul > database\database.sqlite` + `migrate --force --seed`
-7. `config:cache` + `route:cache` + `view:cache`
-8. NSSM service (auto-start) + `netsh` firewall porta 8000
+
+**Detecção de update:** se `C:\RenovatPneus\backend\.env` existir, para AMBOS os serviços (API + SSL) antes de copiar arquivos — senão "arquivo em uso".
+
+1. Instala `runtime\vc_redist.x64.exe` (silencioso, sem reboot) → extrai `runtime\php.zip` → `C:\RenovatPneus\runtime\php\`
+2. Copia `app\` → `C:\RenovatPneus\backend\` (xcopy). **Após o xcopy:** `del bootstrap\cache\*.php` + `rd /s /q vendor\laravel\pail` e `vendor\laravel\pao` — xcopy não remove sobras de instalações anteriores
+3. Cria pastas + `icacls` em `storage/` e `bootstrap/cache/`
+4. Configura `.env`: em update, restaura `.env` do backup e verifica guard de `APP_KEY` (ver abaixo). Em install limpo, detecta IP local (filtro RFC 1918) e grava `SANCTUM_STATEFUL_DOMAINS` com todas as portas
+5. Guard de APP_KEY: `findstr /b /c:"APP_KEY=base64:" .env` — se ausente, roda `artisan key:generate --force`. Evita `MissingAppKeyException` herdada de instalação anterior que falhou
+6. `type nul > database\database.sqlite` (se não existir) + `migrate --force`. Seed condicional: só se `users` estiver vazia (update sobre banco existente não re-seed)
+7. `optimize:clear` + `package:discover` + `config:cache` + `route:cache` + `view:cache` — nessa ordem. `optimize:clear` antes para não cachear estado stale
+8. NSSM service (auto-start) + `netsh` firewall portas 8000 e 8443
 
 ### php.ini — extensões habilitadas
 `pdo_sqlite`, `sqlite3`, `openssl`, `mbstring`, `fileinfo`
-> `bcmath`, `xml`, `json`, `tokenizer` são **built-in** no PHP 8.2 — não precisam de `extension=`
+> `bcmath`, `xml`, `json`, `tokenizer` são **built-in** no PHP 8.3 — não precisam de `extension=`
+
+### composer.json — configurações críticas para o instalador
+```json
+"extra": {
+    "laravel": {
+        "dont-discover": ["laravel/pail", "laravel/pao"]
+    }
+},
+"config": {
+    "platform": { "php": "8.3.0" }
+}
+```
+`dont-discover` impede que `package:discover` registre pacotes dev (pail, pao) no `bootstrap/cache/packages.php` — mesmo que sobrem no vendor de instalação anterior. `platform.php` força o Composer a resolver dependências para PHP 8.3 (evita Symfony 8.x que exige PHP 8.4.1+).
+
+### Detecção de IP local (filtro RFC 1918)
+`ipconfig | findstr IPv4` pega adaptadores VPN/cloud com IP público. Usar PowerShell com regex:
+```powershell
+Get-NetIPAddress -AddressFamily IPv4 | Where-Object {
+    $_.IPAddress -match '^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.)'
+}
+```
+Incluir **todos** os IPs privados no `SANCTUM_STATEFUL_DOMAINS` (máquinas com 2+ adaptadores).
+
+**Escape em `for /f` + PowerShell no batch:** `\"` é mangled pelo cmd (some ou vira espaço, corrompendo o `.env`). Usar aspas **simples** dentro do comando PowerShell: `-join ','` funciona, `-join \",\"` quebra silenciosamente.
+
+### Pacote de Update (pós-entrega)
+
+Para atualizações no cliente sem reinstalar: `Desktop\RenovatPneus-Update-vX.Y.Z\`
+
+```
+update.bat                                    Script 8 passos — requer Admin
+LEIA-ME.txt
+backend\app\Models\BarcodeSequence.php
+backend\app\Http\Controllers\Api\ProductController.php
+backend\database\migrations\*.php
+public\                                       frontend compilado
+tools\verify_migration.php                    checagem pós-migration
+```
+
+**O que o update.bat faz:** para serviços → backup timestampado do `.env` e `.sqlite` → xcopy 3 arquivos PHP → substitui `public\` → corrige 3 chaves de sessão no `.env` (replace-or-append, preserva `APP_KEY` e `SANCTUM_STATEFUL_DOMAINS`) → `migrate --force` com rollback automático em falha → `config:cache` + `route:cache` + `view:cache` → reinicia serviços → health check.
+
+**Última versão entregue:** v1.0.2 (2026-06-17) — aba Serviços no Relatório + fix edição de produto (422).
+Anterior: v1.0.1 (2026-06-17) — Bug1a (paginação), Bug1b (invalidação), Bug2 (barcode collision), Bug3 (sessão perdida no F5).
+
+---
 
 ### Gerar pacote para o cliente
 ```batch
 :: 1. Rodar na raiz do projeto:
 preparar-app.bat
-:: → npm run build → copia dist → backend/public/ → xcopy backend/ → instalador\app\
+:: → npm run build → copia dist → backend/public/
+:: → robocopy /MIR backend/ → instalador\app\ (remove sobras como pail, phpunit)
 :: → também copia deploy/config/ssl_generate.php → instalador\config\
 
 :: 2. Garantir que runtime\ tenha:
-::    php.zip       (PHP 8.2 Thread Safe x64 — windows.php.net/download)
-::    nssm.exe      (já incluído)
-::    stunnel\      (estrutura completa — ver abaixo)
+::    php.zip           (PHP 8.3.31 TS x64 VS16 — windows.php.net/download)
+::    vc_redist.x64.exe (aka.ms/vs/17/release/vc_redist.x64.exe — ~24MB)
+::    nssm.exe          (já incluído)
+::    stunnel\          (estrutura completa — ver abaixo)
 
 :: 3. Entregar pasta ao cliente → instalar.bat como Administrador
 ```
+
+**preparar-app.bat usa `robocopy /MIR`** (não xcopy) para copiar o backend — `/MIR` espelha o source e **remove** arquivos no destino que não existem no source. Essencial para que pacotes dev removidos do vendor não sobrevivam no instalador.
 
 **Pacote pronto em:** `Desktop\RenovatPneus_v1.0.0_Instalador\`
 **URL cliente:** `http://localhost:8000` | `http://<IP-LAN>:8000`
@@ -148,7 +226,7 @@ runtime\stunnel\
 - Registra serviço NSSM `RenovatPneusSSL` com `AppDirectory=runtime\stunnel\bin` e `AppEnvironmentExtra=OPENSSL_CONF=...`
 - Abre porta 8443 no firewall
 
-**Armadilhas já resolvidas:**
+**Armadilhas já resolvidas — stunnel:**
 - `tstunnel.exe` (headless) — não usar `stunnel.exe` (GUI, não roda como serviço via NSSM)
 - `foreground = yes` é opção Unix-only — não incluir no `stunnel.conf` no Windows
 - `openssl_pkey_export()` no PHP precisa receber `$config` como 4º argumento, senão a chave fica vazia
@@ -156,6 +234,14 @@ runtime\stunnel\
 - NSSM `AppEnvironmentExtra` (não `AppEnvironment`) — `AppEnvironment` substitui o ambiente inteiro, stunnel perde PATH e falha
 - xcopy do stunnel sem guard `if not exist` — reinstalações devem sempre sobrescrever
 - Check de existência do stunnel no **source** do instalador (`%~dp0runtime\stunnel\bin\tstunnel.exe`), não no destino
+
+**Armadilhas do instalador geral (debugadas no cliente em 2026-06-12):**
+- **PHP VS16 obrigatório** — VS17 (8.5+) crasha em máquinas sem VCRUNTIME 14.44. Mesmo com vc_redist instalado, reboot é necessário (DLL em uso). PHP 8.3 VS16 exige só 14.20, presente em qualquer Windows moderno
+- **APP_KEY perdido para sempre em updates** — se `key:generate` falha na primeira instalação, o `.env` fica sem chave e todos os updates futuros preservam o `.env` defeituoso → `MissingAppKeyException` (500). Guard obrigatório no instalador após restaurar `.env`
+- **xcopy não remove sobras** — `laravel/pail`, `phpunit` e outros pacotes dev de instalações anteriores persistem no destino → "Class not found" no `package:discover`. Solução: `robocopy /MIR` no `preparar-app.bat` + limpeza explícita no instalador após xcopy
+- **IP de VPN no .env** — `ipconfig | findstr IPv4` pega adaptadores VPN com IP público → Sanctum rejeita todas as sessões. Usar `Get-NetIPAddress` com filtro RFC 1918
+- **Update deve parar TODOS os serviços** (API + SSL) antes do xcopy — parar só o API deixa stunnel com DLLs em uso → "violação de compartilhamento"
+- **Diagnóstico remoto:** `Select-String "production.ERROR" laravel.log | Select-Object -Last 3 | ForEach-Object { $_.Line.Substring(0,400) }` — saída pequena que o cliente consegue fotografar ou copiar
 
 **SANCTUM e sessão via HTTPS:**
 - `SESSION_DOMAIN=` (vazio) — cookie funciona para qualquer host (localhost ou IP)
@@ -178,7 +264,9 @@ runtime\stunnel\
 | Impressão de etiquetas (react-to-print v3, A4 + térmica 80×40mm) | ✅ |
 | Logs de auditoria (Auth, Sale, Movement, User) | ✅ |
 | Página Relatórios (entradas + vendas, filtros, export Excel/PDF) — só ADM | ✅ |
-| Versionamento v1.0.0 + créditos na sidebar/drawer | ✅ |
+| Versionamento v1.0.1 + créditos na sidebar/drawer | ✅ |
 | Fase 5 — Instalador standalone (PHP bundled + SQLite + NSSM) | ✅ |
 | HTTPS via stunnel (porta 8443) + câmera no celular | ✅ |
 | Pacote distribúível na Área de Trabalho | ✅ Pronto |
+| Update v1.0.1 (paginação, invalidação, barcode, sessão) | ✅ Entregue 2026-06-17 |
+| Update v1.0.2 — aba Serviços no Relatório             | ✅ Entregue 2026-06-17 |

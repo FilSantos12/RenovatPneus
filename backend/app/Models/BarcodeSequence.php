@@ -13,9 +13,14 @@ class BarcodeSequence extends Model
     {
         return DB::transaction(function () {
             $sequence = static::lockForUpdate()->first();
-            $next = $sequence->last_sequence + 1;
-            $sequence->update(['last_sequence' => $next]);
-            return 'RNV-' . str_pad($next, 6, '0', STR_PAD_LEFT);
+
+            do {
+                $next = $sequence->last_sequence + 1;
+                $sequence->update(['last_sequence' => $next]);
+                $barcode = 'RNV-' . str_pad($next, 6, '0', STR_PAD_LEFT);
+            } while (Product::withTrashed()->where('barcode', $barcode)->exists());
+
+            return $barcode;
         });
     }
 

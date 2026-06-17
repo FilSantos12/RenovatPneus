@@ -68,4 +68,42 @@ class ReportService
             ]);
         })->values();
     }
+
+    public function getServicesReport(array $filters): Collection
+    {
+        $tz    = config('app.business_timezone');
+        $start = Carbon::createFromFormat('Y-m-d', $filters['start_date'], $tz)->startOfDay()->utc();
+        $end   = Carbon::createFromFormat('Y-m-d', $filters['end_date'],   $tz)->endOfDay()->utc();
+
+        $sales = Sale::with(['services.service', 'user'])
+            ->whereBetween('created_at', [$start, $end])
+            ->when($filters['user_id']    ?? null, fn ($q, $v) => $q->where('user_id', $v))
+            ->when(
+                $filters['service_id'] ?? null,
+                fn ($q, $v) => $q->whereHas('services', fn ($sq) => $sq->where('service_id', $v))
+            )
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return $sales->flatMap(function ($sale) use ($filters) {
+            $services = $sale->services;
+
+            if (!empty($filters['service_id'])) {
+                $services = $services->where('service_id', (int) $filters['service_id']);
+            }
+
+            return $services->map(fn ($ss) => [
+                'sale_id'        => $sale->id,
+                'service_name'   => $ss->service?->name,
+                'customer_name'  => $sale->customer_name,
+                'quantity'       => $ss->quantity,
+                'unit_price'     => (float) $ss->unit_price,
+                'subtotal'       => (float) $ss->subtotal,
+                'created_at'     => $sale->created_at,
+                'payment_method' => $sale->payment_method->value,
+                'user_name'      => $sale->user?->name,
+                'status'         => $sale->status->value,
+            ]);
+        })->values();
+    }
 }

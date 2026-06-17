@@ -1,7 +1,9 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { productService, type ProductFilters, type ProductPayload } from '@/services/product.service'
 import { getErrorMessage } from '@/lib/errors'
+import { DASHBOARD_KEYS } from './useDashboard'
+import { MOVEMENT_KEYS } from './useMovements'
 
 export const PRODUCT_KEYS = {
   all: ['products'] as const,
@@ -15,6 +17,7 @@ export function useProducts(filters?: ProductFilters) {
   return useQuery({
     queryKey: PRODUCT_KEYS.list(filters),
     queryFn: () => productService.list(filters),
+    placeholderData: keepPreviousData,
   })
 }
 
@@ -51,6 +54,8 @@ export function useCreateProduct() {
     mutationFn: (payload: ProductPayload) => productService.create(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: PRODUCT_KEYS.all })
+      queryClient.invalidateQueries({ queryKey: DASHBOARD_KEYS.summary })
+      queryClient.invalidateQueries({ queryKey: MOVEMENT_KEYS.all })
       toast.success('Produto cadastrado com sucesso!')
     },
     onError: (error: unknown) => {

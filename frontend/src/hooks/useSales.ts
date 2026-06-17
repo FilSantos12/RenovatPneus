@@ -35,6 +35,8 @@ export function useCreateSale() {
       queryClient.invalidateQueries({ queryKey: SALE_KEYS.all })
       queryClient.invalidateQueries({ queryKey: PRODUCT_KEYS.all })
       queryClient.invalidateQueries({ queryKey: MOVEMENT_KEYS.all })
+      queryClient.invalidateQueries({ queryKey: DASHBOARD_KEYS.summary })
+      queryClient.invalidateQueries({ queryKey: ['finance'] })
       toast.success('Saída registrada com sucesso!')
     },
     onError: (error: unknown) => {

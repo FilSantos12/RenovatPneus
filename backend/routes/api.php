@@ -40,8 +40,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // ADM — finanças, relatórios e usuários
     Route::middleware('role:adm')->group(function () {
         Route::get('/finance/summary', [FinanceController::class, 'summary']);
-        Route::get('/reports/entries', [ReportController::class, 'entries']);
-        Route::get('/reports/sales',   [ReportController::class, 'sales']);
+        Route::get('/reports/entries',   [ReportController::class, 'entries']);
+        Route::get('/reports/sales',     [ReportController::class, 'sales']);
+        Route::get('/reports/services',  [ReportController::class, 'services']);
         Route::patch('/users/{user}/toggle-active', [UserController::class, 'toggleActive']);
         Route::apiResource('users', UserController::class);
     });

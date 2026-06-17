@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx'
-import type { Sale, Movement, EntryReportItem, SaleReportItem } from '@/app/types'
+import type { Sale, Movement, EntryReportItem, SaleReportItem, ServiceReportItem } from '@/app/types'
 
 export function exportHistoricoToExcel(items: Array<{ kind: string; data: any }>) {
   const rows = items.map(item => {
@@ -119,6 +119,40 @@ export function exportSalesToExcel(items: SaleReportItem[], date: string) {
   XLSX.utils.book_append_sheet(wb, ws, 'Vendas')
   ws['!cols'] = Object.keys(rows[0] ?? {}).map(() => ({ wch: 20 }))
   XLSX.writeFile(wb, `relatorio-vendas-${date}.xlsx`)
+}
+
+export function exportServicesToExcel(items: ServiceReportItem[], date: string) {
+  const paymentLabels: Record<string, string> = {
+    dinheiro: 'Dinheiro',
+    cartao_credito: 'Cartão de Crédito',
+    cartao_debito: 'Cartão de Débito',
+    pix: 'PIX',
+    fiado: 'Fiado',
+  }
+  const statusLabels: Record<string, string> = {
+    pago: 'Pago',
+    pendente: 'Pendente',
+    cancelado: 'Cancelado',
+  }
+
+  const rows = items.map(item => ({
+    'Venda #':    item.sale_id,
+    'Serviço':    item.service_name,
+    'Cliente':    item.customer_name ?? '—',
+    'Quantidade': item.quantity,
+    'Vlr Unit.':  Number(item.unit_price).toFixed(2),
+    'Subtotal':   Number(item.subtotal).toFixed(2),
+    'Pagamento':  paymentLabels[item.payment_method] ?? item.payment_method,
+    'Data/Hora':  new Date(item.created_at).toLocaleString('pt-BR'),
+    'Operador':   item.user_name,
+    'Status':     statusLabels[item.status] ?? item.status,
+  }))
+
+  const ws = XLSX.utils.json_to_sheet(rows)
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Serviços')
+  ws['!cols'] = Object.keys(rows[0] ?? {}).map(() => ({ wch: 20 }))
+  XLSX.writeFile(wb, `relatorio-servicos-${date}.xlsx`)
 }
 
 export function exportReportToPDF() {

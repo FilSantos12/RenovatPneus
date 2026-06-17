@@ -45,12 +45,21 @@ echo  [3/3] Copiando backend para o instalador...
 echo  (vendor/ tem ~80MB, pode demorar alguns minutos)
 echo.
 if not exist "%DEST%" mkdir "%DEST%"
-xcopy /E /Y /I /Q "%BACKEND%\*" "%DEST%\" /EXCLUDE:"%PROJECT%preparar-app-exclude.txt"
-if %errorLevel% neq 0 (
-    echo  AVISO: Alguns arquivos nao foram copiados (permissao ou caminho longo).
+:: /MIR espelha: copia novos e REMOVE sobras (ex.: pacotes dev removidos do vendor)
+robocopy "%BACKEND%" "%DEST%" /MIR /NFL /NDL /NJH /NJS ^
+    /XD .git node_modules "storage\logs" "storage\framework\cache" "storage\framework\sessions" "storage\framework\views" "bootstrap\cache" ^
+    /XF .env database.sqlite
+if %errorLevel% gtr 3 (
+    echo  AVISO: robocopy retornou erro %errorLevel%.
     echo  Verifique se o app funcionou mesmo assim.
 )
 echo        Backend copiado para instalador\app\
+
+:: Limpar arquivos que nao devem ir para o cliente
+del /f /q "%DEST%\bootstrap\cache\packages.php" >nul 2>&1
+del /f /q "%DEST%\bootstrap\cache\services.php"  >nul 2>&1
+del /f /q "%DEST%\storage\logs\laravel*.log"      >nul 2>&1
+echo        Arquivos temporarios limpos.
 
 echo.
 echo  ================================================
@@ -66,10 +75,10 @@ echo  Checklist para distribuicao:
 echo.
 echo  [OK] app\ copiado para o instalador
 echo  [OK] ssl_generate.php copiado para config\
-echo  [ ]  Baixar PHP 8.2 TS x64 e salvar como:
+echo  [ ]  Baixar PHP 8.3 TS x64 VS16 e salvar como:
 echo         Desktop\RenovatPneus_v1.0.0_Instalador\runtime\php.zip
 echo         Link: https://windows.php.net/download/
-echo              (Baixar o ZIP da versao Thread Safe x64)
+echo              (PHP 8.3 — Thread Safe — x64 — VS16)
 echo  [ ]  OPCIONAL — camera no celular (HTTPS):
 echo         Baixar stunnel: https://www.stunnel.org/downloads.html
 echo         Versao: stunnel-x.xx-win64-installer.exe

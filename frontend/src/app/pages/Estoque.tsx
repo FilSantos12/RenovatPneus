@@ -15,6 +15,7 @@ export function Estoque() {
   const [filterStatus, setFilterStatus] = useState('');
 
   const [showFormModal, setShowFormModal] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
   const [produtoVisualizando, setProdutoVisualizando] = useState<Product | null>(null);
   const [produtoEditando, setProdutoEditando] = useState<Product | null>(null);
   const [produtoExcluindo, setProdutoExcluindo] = useState<Product | null>(null);
@@ -26,8 +27,10 @@ export function Estoque() {
     }
   }, []);
 
-  const { data, isLoading, isError } = useProducts();
+  const { data, isLoading, isError } = useProducts({ page: currentPage });
   const products: Product[] = data?.data ?? [];
+  const lastPage: number = data?.meta?.last_page ?? 1;
+  const totalProducts: number = data?.meta?.total ?? 0;
   const { mutate: deleteProduct, isPending: isDeleting } = useDeleteProduct();
 
   const brands = Array.from(new Set(products.map((p) => p.brand))).sort();
@@ -446,13 +449,40 @@ export function Estoque() {
         </div>
       )}
 
+      {/* Paginação */}
+      {lastPage > 1 && (
+        <div className="flex items-center justify-between bg-white rounded-2xl px-6 py-4 shadow-sm border border-gray-100">
+          <span className="text-sm text-[#2D2D2D]/60">
+            {totalProducts} produtos · página {currentPage} de {lastPage}
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="px-4 py-2 rounded-xl bg-[#F5F5F5] text-[#2D2D2D] font-medium hover:bg-[#F97316]/10 hover:text-[#F97316] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Anterior
+            </button>
+            <button
+              onClick={() => setCurrentPage((p) => Math.min(lastPage, p + 1))}
+              disabled={currentPage === lastPage}
+              className="px-4 py-2 rounded-xl bg-[#F97316] text-white font-medium hover:bg-[#F97316]/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Próxima
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Modal de Cadastro / Edição */}
       {(showFormModal || produtoEditando) && (
         <ProductFormModal
           product={produtoEditando ?? undefined}
           onClose={() => {
+            const wasCreating = showFormModal && !produtoEditando;
             setShowFormModal(false);
             setProdutoEditando(null);
+            if (wasCreating) setCurrentPage(1);
           }}
         />
       )}
