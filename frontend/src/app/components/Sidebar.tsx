@@ -159,7 +159,7 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
           {!isCollapsed && (
             <div className="px-3 pt-3 border-t border-white/10 mt-2">
               <p className="text-[10px] text-white/30 leading-relaxed text-center">
-                v1.0.2 · Desenvolvido por{' '}
+                v1.0.3 · Desenvolvido por{' '}
                 <a
                   href="https://filsantos12.github.io/MyPortifolio/index.html#"
                   target="_blank"

@@ -33,13 +33,13 @@ export function Estoque() {
   const totalProducts: number = data?.meta?.total ?? 0;
   const { mutate: deleteProduct, isPending: isDeleting } = useDeleteProduct();
 
-  const brands = Array.from(new Set(products.map((p) => p.brand))).sort();
+  const brands = Array.from(new Set(products.map((p) => p.brand).filter(Boolean))).sort() as string[];
 
   const filteredProducts = products.filter((product) => {
     const matchesSearch =
-      product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (product.name ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (product.barcode ?? '').includes(searchTerm) ||
-      product.size.toLowerCase().includes(searchTerm.toLowerCase());
+      (product.size ?? '').toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesBrand = !filterBrand || product.brand === filterBrand;
 

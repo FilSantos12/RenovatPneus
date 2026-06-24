@@ -5,6 +5,7 @@ export interface ProductFilters {
   name?: string
   brand?: string
   size?: string
+  search?: string
   page?: number
   per_page?: number
 }

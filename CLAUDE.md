@@ -90,6 +90,7 @@ RenovatPneus/
 - `meta.last_page` e `meta.total` ficam dentro de `meta` — não na raiz. Usar `data?.meta?.last_page`
 - Frontend: `useProducts({ page })` com `placeholderData: keepPreviousData` (evita flicker)
 - Ao criar produto, resetar para `currentPage = 1` (novo produto aparece no topo — ordenação `created_at desc, id desc`)
+- `useProducts(filters?, options?)` — segundo argumento `{ enabled?: boolean }` desativa a query quando não necessário (ex.: `Saida.tsx` desativa até o debounce atingir 2+ caracteres)
 
 **Invalidação de cache React Query:**
 - `useCreateProduct.onSuccess` → invalida `PRODUCT_KEYS.all` + `DASHBOARD_KEYS.summary` + `MOVEMENT_KEYS.all`
@@ -98,9 +99,18 @@ RenovatPneus/
 - `FinanceController::summary()` só consulta `Sale` — criar produto/movimento NÃO afeta o financeiro, não invalidar `['finance']` nesses casos
 
 **Scanner de barcode:**
-- `handleScan` nas páginas Entrada/Saida é **async** — busca por `GET /api/products/barcode/{code}`, não lista local (que tem só 15 itens da página 1)
+- `handleScan` nas páginas Entrada, Saida e **Etiquetas** é **async** — busca por `GET /api/products/barcode/{code}`, não lista local
+- `Etiquetas.tsx` — pré-carrega produto via `location.state?.productId` usando `useProduct(id ?? 0)` hook + `productAddedRef` para evitar dupla adição; toast de erro se id não existe mais
+- `Etiquetas.tsx` — empty-state div fica **fora** do `ref={printRef}`. O `printRef` contém **só** LabelItems. Misturar empty-state + LabelItems dentro do printRef causava `NotFoundError: removeChild` no commit do React (4 tentativas de fix, resolvido na 4ª pela separação estrutural)
 - USB/HID: listener no **`document`** (não em `<input>` oculto) — funciona independente de qual elemento está focado. Threshold 80ms entre teclas. Ignora eventos em `INPUT[text]` e `TEXTAREA` para não interceptar digitação humana
 - Câmera: `result.rawValue.trim()` defensivo; `facingMode: { ideal: 'environment' }`
+
+**Busca de produto na venda (`Saida.tsx`):**
+- Campo de texto usa busca server-side com debounce 300ms: `useProducts({ name: debouncedSearch }, { enabled: debouncedSearch.length >= 2 })`
+- Dropdown não aparece para buscas < 2 caracteres (evita requisição desnecessária)
+- Escala para qualquer volume de produtos — sem limite de página
+- Busca por barcode: usar o scanner (`handleScan` async)
+- Busca por marca via texto foi removida (era filtro local; não escalava)
 
 **Logs:**
 - `LOG_LEVEL=warning` no `.env` NÃO suprime `Log::info()` explícito no código — só filtra logs automáticos do framework
@@ -171,10 +181,12 @@ public\                                       frontend compilado
 tools\verify_migration.php                    checagem pós-migration
 ```
 
-**O que o update.bat faz:** para serviços → backup timestampado do `.env` e `.sqlite` → xcopy 3 arquivos PHP → substitui `public\` → corrige 3 chaves de sessão no `.env` (replace-or-append, preserva `APP_KEY` e `SANCTUM_STATEFUL_DOMAINS`) → `migrate --force` com rollback automático em falha → `config:cache` + `route:cache` + `view:cache` → reinicia serviços → health check.
+**O que o update.bat faz (v1.0.4+):** para serviços (API + SSL) → backup timestampado do `.env` → limpa `public\assets\` inteira → copia `public\` novo + `copy /Y index.html` explícito → guard `SESSION_SECURE_COOKIE=false` in-place com labels (sem if aninhado; UTF-8 sem BOM via `[IO.File]::WriteAllText` — `Set-Content` do PS 5.1 grava UTF-16 com BOM e quebra o Laravel) → `config:clear` + `config:cache` + `route:cache` + `view:cache` → reinicia serviços → health check. `:ABORT` tenta reiniciar os serviços antes de sair e exibe o caminho do backup. Todas as verificações de `%errorLevel%` usam `!errorLevel!` (delayed expansion) para evitar expansão prematura em blocos `( )`.
 
-**Última versão entregue:** v1.0.2 (2026-06-17) — aba Serviços no Relatório + fix edição de produto (422).
-Anterior: v1.0.1 (2026-06-17) — Bug1a (paginação), Bug1b (invalidação), Bug2 (barcode collision), Bug3 (sessão perdida no F5).
+**Última versão entregue:** v1.0.4 (2026-06-23) — (1) fix Chrome Tradutor: `translate="no"` + `lang="pt-BR"` no `<html>` e `<meta name="google" content="notranslate">` no `index.html` — o tradutor automático substituía nós de texto fora do React causando `NotFoundError: removeChild`; (2) fix busca no Estoque: guard `?? ''` em `name`/`size` e `.filter(Boolean)` nas marcas para campos `null` no banco (bundle `index-1T2Qwnhp.js`).
+Anterior: v1.0.3 (2026-06-23) — fix etiquetas em produtos de página 2+; busca server-side com debounce em Saida; versão atualizada na UI; fix estrutural NotFoundError removeChild na página Etiquetas (empty state movido para fora do printRef — bundle `index-Cqf7-kNG.js`).
+Anterior: v1.0.2 (2026-06-17) — aba Serviços no Relatório + fix edição de produto (422).
+v1.0.1 (2026-06-17) — Bug1a (paginação), Bug1b (invalidação), Bug2 (barcode collision), Bug3 (sessão perdida no F5).
 
 ---
 
@@ -264,9 +276,11 @@ runtime\stunnel\
 | Impressão de etiquetas (react-to-print v3, A4 + térmica 80×40mm) | ✅ |
 | Logs de auditoria (Auth, Sale, Movement, User) | ✅ |
 | Página Relatórios (entradas + vendas, filtros, export Excel/PDF) — só ADM | ✅ |
-| Versionamento v1.0.1 + créditos na sidebar/drawer | ✅ |
+| Versionamento v1.0.3 + créditos na sidebar/drawer | ✅ |
 | Fase 5 — Instalador standalone (PHP bundled + SQLite + NSSM) | ✅ |
 | HTTPS via stunnel (porta 8443) + câmera no celular | ✅ |
 | Pacote distribúível na Área de Trabalho | ✅ Pronto |
 | Update v1.0.1 (paginação, invalidação, barcode, sessão) | ✅ Entregue 2026-06-17 |
 | Update v1.0.2 — aba Serviços no Relatório             | ✅ Entregue 2026-06-17 |
+| Update v1.0.3 — etiquetas pág.2+, busca venda server-side, versão UI | ✅ Entregue 2026-06-23 |
+| Update v1.0.4 — fix Chrome Tradutor (translate="no") + fix busca Estoque (null toLowerCase) | ✅ Entregue 2026-06-23 |

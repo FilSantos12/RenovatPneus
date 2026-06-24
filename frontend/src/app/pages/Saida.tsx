@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Search, Plus, Minus, Check, Camera, AlertCircle, X, Loader2 } from 'lucide-react';
 import { useProducts } from '@/hooks/useProducts';
 import { useServices } from '@/hooks/useServices';
@@ -34,12 +34,20 @@ export function Saida() {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [cartServices, setCartServices] = useState<CartService[]>([]);
 
-  const { data: productsData } = useProducts();
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchTerm.trim()), 300);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
+
+  const { data: searchData } = useProducts(
+    { search: debouncedSearch },
+    { enabled: debouncedSearch.length >= 2 }
+  );
   const { data: servicesData } = useServices();
   const createSale = useCreateSale();
   const confirmRef = useRef<HTMLDivElement>(null);
 
-  const products: Product[] = productsData?.data ?? [];
   const services: Service[] = servicesData?.data ?? [];
 
   async function handleScan(barcode: string) {
@@ -56,12 +64,9 @@ export function Saida() {
     }
   }
 
-  const filteredProducts = products.filter(
-    (p) =>
-      p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (p.barcode ?? '').includes(searchTerm) ||
-      p.brand.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredProducts: Product[] = debouncedSearch.length >= 2
+    ? (searchData?.data ?? [])
+    : [];
 
   const handleProductSelect = (product: Product) => {
     setSelectedProduct(product);

@@ -1,11 +1,13 @@
 import { useRef, useState, useEffect } from 'react'
 import { useReactToPrint } from 'react-to-print'
 import { useLocation } from 'react-router'
-import { useProducts } from '@/hooks/useProducts'
+import { useProducts, useProduct } from '@/hooks/useProducts'
 import { LabelItem } from '../components/Labels/LabelItem'
 import { BarcodeScanner } from '../components/BarcodeScanner/BarcodeScanner'
 import type { Product } from '../types'
 import { Printer, Trash2, ScanLine, Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
+import { productService } from '@/services/product.service'
 
 interface LabelEntry {
   product: Product
@@ -33,12 +35,20 @@ export function Etiquetas() {
   })
 
   // Pré-carregar produto quando navegado via state (botão de etiqueta no Estoque)
+  const productIdFromState = location.state?.productId as number | undefined
+  const { data: productFromState, isError: productFromStateError } = useProduct(productIdFromState ?? 0)
+  const productAddedRef = useRef(false)
   useEffect(() => {
-    const productId = location.state?.productId
-    if (!productId || !products.length) return
-    const product = products.find((p) => p.id === productId)
-    if (product) addProduct(product)
-  }, [location.state, products])
+    if (!productIdFromState || productAddedRef.current) return
+    if (productFromStateError) {
+      productAddedRef.current = true
+      toast.error('Produto não encontrado ou removido.')
+      return
+    }
+    if (!productFromState) return
+    productAddedRef.current = true
+    addProduct(productFromState)
+  }, [productFromState, productFromStateError])
 
   function addProduct(product: Product) {
     setEntries((prev) => {
@@ -52,11 +62,13 @@ export function Etiquetas() {
     })
   }
 
-  function handleScan(barcode: string) {
-    const product = products.find((p) => p.barcode === barcode)
-    if (product) {
+  async function handleScan(barcode: string) {
+    try {
+      const product = await productService.findByBarcode(barcode)
       addProduct(product)
       setScannerOpen(false)
+    } catch {
+      toast.error(`Produto não encontrado para o código: ${barcode}`)
     }
   }
 
@@ -233,7 +245,15 @@ export function Etiquetas() {
               </span>
             </p>
 
-            {/* Área impressa */}
+            {/* Empty state — fora do printRef para não entrar na árvore de reconciliação do conteúdo imprimível */}
+            {labelsToRender.length === 0 && (
+              <div className="w-full flex flex-col items-center justify-center py-16 text-[#2D2D2D]/40">
+                <Printer className="w-10 h-10 mb-3 opacity-30" />
+                <p className="text-sm">Adicione produtos para visualizar as etiquetas</p>
+              </div>
+            )}
+
+            {/* Área impressa — contém apenas conteúdo imprimível */}
             <div
               ref={printRef}
               className={`flex flex-wrap gap-2 ${printMode === 'a4' ? 'p-2' : 'p-0'}`}
@@ -246,12 +266,6 @@ export function Etiquetas() {
                   showName={showName}
                 />
               ))}
-              {labelsToRender.length === 0 && (
-                <div className="w-full flex flex-col items-center justify-center py-16 text-[#2D2D2D]/40">
-                  <Printer className="w-10 h-10 mb-3 opacity-30" />
-                  <p className="text-sm">Adicione produtos para visualizar as etiquetas</p>
-                </div>
-              )}
             </div>
           </div>
         </div>

@@ -35,6 +35,11 @@ class ProductController extends Controller
             ->when($request->name, fn ($q, $v) => $q->where('name', 'like', "%{$v}%"))
             ->when($request->brand, fn ($q, $v) => $q->where('brand', 'like', "%{$v}%"))
             ->when($request->size, fn ($q, $v) => $q->where('size', $v))
+            ->when($request->search, fn ($q, $v) => $q->where(function ($q) use ($v) {
+                $q->where('name', 'like', "%{$v}%")
+                  ->orWhere('barcode', 'like', "%{$v}%")
+                  ->orWhere('brand', 'like', "%{$v}%");
+            }))
             ->when($request->boolean('low_stock'), fn ($q) => $q->whereColumn('quantity', '<=', 'min_stock'))
             ->when(! is_null($request->active), fn ($q) => $q->where('active', $request->boolean('active')))
             ->orderBy('created_at', 'desc')

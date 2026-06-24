@@ -13,11 +13,12 @@ export const PRODUCT_KEYS = {
   nextBarcode: ['products', 'next-barcode'] as const,
 }
 
-export function useProducts(filters?: ProductFilters) {
+export function useProducts(filters?: ProductFilters, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: PRODUCT_KEYS.list(filters),
     queryFn: () => productService.list(filters),
     placeholderData: keepPreviousData,
+    enabled: options?.enabled ?? true,
   })
 }
 
