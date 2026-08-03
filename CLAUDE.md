@@ -70,6 +70,7 @@ RenovatPneus/
 - Logout: `Auth::guard('web')->logout()` — não `Auth::logout()` (lança 500 com Sanctum)
 - `AuthContext` logout: `setUser(null)` em `finally` — deslogado mesmo se backend falhar
 - `SESSION_SECURE_COOKIE=false` obrigatório em produção — o sistema serve HTTP puro via LAN; browsers recusam enviar cookies `Secure` em HTTP, quebrando a sessão a cada F5
+- `backend/.env.example` (dev local a partir do source): `DB_CONNECTION=sqlite`, `SESSION_DOMAIN=` vazio, `SANCTUM_STATEFUL_DOMAINS` deve incluir a porta usada pelo `php artisan serve` (ex.: `127.0.0.1:8000`, `localhost:8000`). Acessar via `127.0.0.1` com `SESSION_DOMAIN=localhost` faz o browser descartar o cookie (hosts distintos); e `SANCTUM_STATEFUL_DOMAINS` sem a porta faz `EnsureFrontendRequestsAreStateful::fromFrontend()` comparar `Origin` (`127.0.0.1:8000/`) contra o padrão `127.0.0.1/*`, que não casa. Sintoma: login retorna 200 normalmente, mas todo `GET` autenticado seguinte (`/api/me`, `/api/dashboard`, etc.) cai em 401 — a falha é silenciosa porque o controller de login não depende do middleware stateful para responder
 
 **Frontend prod vs dev:**
 - Dev: Vite proxy `/api` → `localhost:8000` (`VITE_API_URL=''`)
