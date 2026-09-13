@@ -44,7 +44,7 @@ export function Entrada() {
     (p) =>
       p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (p.barcode ?? '').includes(searchTerm) ||
-      p.brand.toLowerCase().includes(searchTerm.toLowerCase())
+      (p.brand ?? '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const handleProductSelect = (product: Product) => {
@@ -121,7 +121,7 @@ export function Entrada() {
                     >
                       <p className="font-medium text-[#2D2D2D]">{product.name}</p>
                       <p className="text-sm text-[#2D2D2D]/60">
-                        {product.size} - {product.brand} - {product.barcode ?? 'sem código'}
+                        {product.size || '—'} - {product.brand || '—'} - {product.barcode ?? 'sem código'}
                       </p>
                     </button>
                   ))}
@@ -156,7 +156,7 @@ export function Entrada() {
                       {selectedProduct.name}
                     </p>
                     <p className="text-[#2D2D2D]/60">
-                      {selectedProduct.size} - {selectedProduct.brand}
+                      {selectedProduct.size || '—'} - {selectedProduct.brand || '—'}
                     </p>
                     <p className="text-sm text-[#2D2D2D]/60 mt-2">
                       Estoque atual: <strong>{selectedProduct.quantity}</strong> unidades

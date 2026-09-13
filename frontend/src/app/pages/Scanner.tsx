@@ -114,7 +114,7 @@ export function Scanner() {
               <p className="font-['Barlow_Condensed'] font-bold text-lg text-[#2D2D2D]">
                 {scannedProduct.name}
               </p>
-              <p className="text-[#2D2D2D]/60">{scannedProduct.size} - {scannedProduct.brand}</p>
+              <p className="text-[#2D2D2D]/60">{scannedProduct.size || '—'} - {scannedProduct.brand || '—'}</p>
               <div className="flex items-center gap-4 mt-2">
                 <span className="text-sm text-[#2D2D2D]/60">Estoque atual:</span>
                 <span className="text-xl font-['Barlow_Condensed'] font-bold text-[#F97316]">

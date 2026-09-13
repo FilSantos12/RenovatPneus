@@ -234,7 +234,7 @@ export function Saida() {
                     >
                       <p className="font-medium text-[#2D2D2D]">{product.name}</p>
                       <p className="text-sm text-[#2D2D2D]/60">
-                        {product.size} - {product.brand} - Estoque: {product.quantity}
+                        {product.size || '—'} - {product.brand || '—'} - Estoque: {product.quantity}
                       </p>
                     </button>
                   ))}
@@ -270,7 +270,7 @@ export function Saida() {
                         {selectedProduct.name}
                       </p>
                       <p className="text-[#2D2D2D]/60">
-                        {selectedProduct.size} - {selectedProduct.brand}
+                        {selectedProduct.size || '—'} - {selectedProduct.brand || '—'}
                       </p>
                       <p className="text-sm text-[#2D2D2D]/60 mt-2">
                         Estoque: <strong>{selectedProduct.quantity}</strong> | Preço: <strong>R$ {selectedProduct.price_sale.toFixed(2)}</strong>

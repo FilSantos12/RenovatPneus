@@ -41,6 +41,14 @@ class ProductController extends Controller
                   ->orWhere('brand', 'like', "%{$v}%");
             }))
             ->when($request->boolean('low_stock'), fn ($q) => $q->whereColumn('quantity', '<=', 'min_stock'))
+            ->when($request->status, function ($q, $status) {
+                return match ($status) {
+                    'low_stock' => $q->whereColumn('quantity', '<=', 'min_stock')->where('quantity', '>', 0),
+                    'zerado' => $q->where('quantity', 0),
+                    'normal' => $q->whereColumn('quantity', '>', 'min_stock'),
+                    default => $q,
+                };
+            })
             ->when(! is_null($request->active), fn ($q) => $q->where('active', $request->boolean('active')))
             ->orderBy('created_at', 'desc')
             ->orderBy('id', 'desc')
@@ -90,5 +98,19 @@ class ProductController extends Controller
         $this->service->destroy($product);
 
         return $this->deleted('Produto removido com sucesso.');
+    }
+
+    public function brands(): JsonResponse
+    {
+        $this->authorize('viewAny', Product::class);
+
+        return response()->json([
+            'brands' => Product::whereNotNull('brand')
+                ->distinct()
+                ->pluck('brand')
+                ->sort()
+                ->values()
+                ->all(),
+        ]);
     }
 }

@@ -14,8 +14,8 @@ export interface Product {
   name: string
   barcode: string
   description?: string
-  brand: string
-  size: string
+  brand: string | null
+  size: string | null
   price_cost?: number
   price_sale: number
   quantity: number

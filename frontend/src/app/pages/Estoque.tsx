@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Search, Eye, Edit, Printer, Plus, AlertTriangle, Check, Loader2, Trash2, X, Barcode, Tag, Ruler, DollarSign, Package } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router';
 import { useProducts, useDeleteProduct } from '@/hooks/useProducts';
+import { useBrands } from '@/hooks/useBrands';
 import type { Product } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { ProductFormModal } from '../components/Products/ProductFormModal';
@@ -20,6 +21,14 @@ export function Estoque() {
   const [produtoEditando, setProdutoEditando] = useState<Product | null>(null);
   const [produtoExcluindo, setProdutoExcluindo] = useState<Product | null>(null);
 
+  // Mapeia status do frontend (OK, BAIXO, ZERADO) para backend (normal, low_stock, zerado)
+  const mapStatusToBackend = (status: string): 'normal' | 'low_stock' | 'zerado' | undefined => {
+    if (status === 'OK') return 'normal';
+    if (status === 'BAIXO') return 'low_stock';
+    if (status === 'ZERADO') return 'zerado';
+    return undefined;
+  };
+
   useEffect(() => {
     if (location.state?.openModal) {
       setShowFormModal(true);
@@ -27,33 +36,27 @@ export function Estoque() {
     }
   }, []);
 
-  const { data, isLoading, isError } = useProducts({ page: currentPage });
+  // Reseta para página 1 quando qualquer filtro muda
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterBrand, filterStatus]);
+
+  // Busca produtos com filtros server-side
+  const { data, isLoading, isError } = useProducts({
+    page: currentPage,
+    name: searchTerm || undefined,
+    brand: filterBrand || undefined,
+    status: mapStatusToBackend(filterStatus),
+  });
+
   const products: Product[] = data?.data ?? [];
   const lastPage: number = data?.meta?.last_page ?? 1;
   const totalProducts: number = data?.meta?.total ?? 0;
   const { mutate: deleteProduct, isPending: isDeleting } = useDeleteProduct();
 
-  const brands = Array.from(new Set(products.map((p) => p.brand).filter(Boolean))).sort() as string[];
-
-  const filteredProducts = products.filter((product) => {
-    const matchesSearch =
-      (product.name ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (product.barcode ?? '').includes(searchTerm) ||
-      (product.size ?? '').toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchesBrand = !filterBrand || product.brand === filterBrand;
-
-    let matchesStatus = true;
-    if (filterStatus === 'OK') {
-      matchesStatus = product.quantity >= product.min_stock;
-    } else if (filterStatus === 'BAIXO') {
-      matchesStatus = product.quantity > 0 && product.low_stock;
-    } else if (filterStatus === 'ZERADO') {
-      matchesStatus = product.quantity === 0;
-    }
-
-    return matchesSearch && matchesBrand && matchesStatus;
-  });
+  // Busca lista completa de marcas para dropdown
+  const { data: allBrands = [] } = useBrands();
+  const brands = allBrands;
 
   function handleConfirmDelete() {
     if (!produtoExcluindo) return;
@@ -112,7 +115,7 @@ export function Estoque() {
           <h1 className="text-3xl font-['Barlow_Condensed'] font-bold text-[#2D2D2D] mb-2">
             Estoque
           </h1>
-          <p className="text-[#2D2D2D]/60">{filteredProducts.length} produtos encontrados</p>
+          <p className="text-[#2D2D2D]/60">{totalProducts} produtos encontrados</p>
         </div>
         {user?.role === 'adm' && (
           <button
@@ -180,7 +183,7 @@ export function Estoque() {
               </tr>
             </thead>
             <tbody>
-              {filteredProducts.map((product, index) => (
+              {products.map((product, index) => (
                 <tr
                   key={product.id}
                   className={`${
@@ -243,7 +246,7 @@ export function Estoque() {
 
       {/* Mobile Cards */}
       <div className="lg:hidden space-y-4">
-        {filteredProducts.map((product) => (
+        {products.map((product) => (
           <div key={product.id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
             <div className="flex items-start justify-between mb-3">
               <div className="flex-1 min-w-0">
@@ -312,7 +315,7 @@ export function Estoque() {
         ))}
       </div>
 
-      {filteredProducts.length === 0 && (
+      {products.length === 0 && (
         <div className="bg-white rounded-2xl p-12 shadow-sm border border-gray-100 text-center">
           <div className="w-20 h-20 bg-[#F5F5F5] rounded-full flex items-center justify-center mx-auto mb-4">
             <Search className="w-10 h-10 text-[#2D2D2D]/40" />
@@ -334,7 +337,7 @@ export function Estoque() {
                 <h2 className="text-2xl font-['Barlow_Condensed'] font-bold text-white leading-tight">
                   {produtoVisualizando.name}
                 </h2>
-                <p className="text-white/60 text-sm mt-1">{produtoVisualizando.brand} — {produtoVisualizando.size}</p>
+                <p className="text-white/60 text-sm mt-1">{produtoVisualizando.brand || '—'} — {produtoVisualizando.size || '—'}</p>
               </div>
               <div className="flex items-center gap-3 flex-shrink-0">
                 {getStatusBadge(produtoVisualizando)}

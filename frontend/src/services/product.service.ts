@@ -6,6 +6,7 @@ export interface ProductFilters {
   brand?: string
   size?: string
   search?: string
+  status?: 'normal' | 'low_stock' | 'zerado'
   page?: number
   per_page?: number
 }

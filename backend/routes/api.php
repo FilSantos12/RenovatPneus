@@ -28,6 +28,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Rotas fixas de produtos ANTES do apiResource (evita conflito com route model binding)
     Route::get('/products/next-barcode', [ProductController::class, 'nextBarcode']);
     Route::get('/products/barcode/{barcode}', [ProductController::class, 'showByBarcode']);
+    Route::get('/products/brands', [ProductController::class, 'brands']);
     Route::apiResource('products', ProductController::class);
 
     Route::apiResource('movements', MovementController::class)->only(['index', 'show', 'store', 'destroy']);
