@@ -5,22 +5,29 @@ namespace App\Http\Controllers\Api;
 use App\Enums\SaleStatus;
 use App\Enums\PaymentMethod;
 use App\Models\Sale;
+use App\Services\PeriodService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
 class FinanceController extends Controller
 {
+    public function __construct(private PeriodService $periodService) {}
+
     public function summary(Request $request): JsonResponse
     {
         $this->authorize('viewAny', Sale::class);
 
         $period = $request->query('period', 'month');
+        $tz     = config('app.business_timezone');
 
         [$start, $end] = match ($period) {
-            'today' => [Carbon::today(), Carbon::now()],
-            'year'  => [Carbon::now()->startOfYear(), Carbon::now()],
-            default => [Carbon::now()->startOfMonth(), Carbon::now()],
+            'today' => [Carbon::now($tz)->startOfDay(), Carbon::now($tz)],
+            'year'  => [Carbon::now($tz)->startOfYear(), Carbon::now($tz)],
+            // $end aqui é sempre "agora", não o fim do período configurado —
+            // o período pode ainda não ter terminado, e queremos refletir só
+            // o que já ocorreu até o momento, igual ao comportamento anterior.
+            default => [$this->periodService->currentMonthPeriod()['start'], Carbon::now($tz)],
         };
 
         // Todas as vendas não-canceladas do período (PAGO + PENDENTE)
@@ -132,13 +139,21 @@ class FinanceController extends Controller
     private function seriesByMonth(Carbon $start, Carbon $end): array
     {
         $months = [];
-        $cursor = $start->copy()->startOfMonth();
         $monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
-        while ($cursor->lte($end)) {
-            $monthEnd = $cursor->copy()->endOfMonth();
+        // Limitação conhecida: $start aqui é sempre 1º de janeiro (calendário,
+        // vindo do branch 'year' de summary()). Quando dia_inicio_mes != 1,
+        // periodContaining(1º de janeiro) encontra o ciclo que CONTÉM essa
+        // data, que pode ter começado em dezembro do ano anterior — ou seja,
+        // o primeiro bucket do gráfico anual pode representar um ciclo
+        // parcial iniciado no ano anterior. Decisão de UX pendente (rotular/
+        // cortar esse ciclo parcial de outra forma) — ver histórico do
+        // projeto / discussão da feature de dia_inicio_mes configurável.
+        $period = $this->periodService->periodContaining($start);
+
+        while ($period['start']->lte($end)) {
             $sales = Sale::where('status', '!=', SaleStatus::CANCELADO)
-                ->whereBetween('created_at', [$cursor, $monthEnd])
+                ->whereBetween('created_at', [$period['start'], $period['end']])
                 ->with(['items.product', 'services.service'])
                 ->get();
 
@@ -146,14 +161,16 @@ class FinanceController extends Controller
             $cost        = $sales->flatMap->items->sum(fn ($i) => ((float) ($i->product?->price_cost ?? 0)) * $i->quantity);
             $serviceCost = $sales->flatMap->services->sum(fn ($s) => ((float) ($s->service?->price_cost ?? 0)) * $s->quantity);
 
+            // Rotula pelo mês em que o ciclo COMEÇA — ex.: com dia_inicio_mes=25,
+            // o período de 25/set a 24/out aparece rotulado como "Set".
             $months[] = [
-                'label'   => $monthNames[$cursor->month - 1],
+                'label'   => $monthNames[$period['start']->month - 1],
                 'revenue' => round($revenue, 2),
                 'cost'    => round($cost, 2),
                 'profit'  => round($revenue - $cost - $serviceCost, 2),
             ];
 
-            $cursor->addMonth();
+            $period = $this->periodService->nextPeriod($period);
         }
 
         return $months;
