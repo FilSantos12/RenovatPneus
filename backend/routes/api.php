@@ -4,10 +4,12 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\FinanceController;
 use App\Http\Controllers\Api\MovementController;
+use App\Http\Controllers\Api\PeriodController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\SaleController;
 use App\Http\Controllers\Api\ServiceController;
+use App\Http\Controllers\Api\SettingController;
 use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
 
@@ -24,6 +26,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
 
     Route::get('/dashboard', [DashboardController::class, 'summary']);
+    Route::get('/period/current', [PeriodController::class, 'current']);
 
     // Rotas fixas de produtos ANTES do apiResource (evita conflito com route model binding)
     Route::get('/products/next-barcode', [ProductController::class, 'nextBarcode']);
@@ -44,6 +47,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/reports/entries',   [ReportController::class, 'entries']);
         Route::get('/reports/sales',     [ReportController::class, 'sales']);
         Route::get('/reports/services',  [ReportController::class, 'services']);
+        Route::get('/settings', [SettingController::class, 'index']);
+        Route::put('/settings', [SettingController::class, 'update']);
         Route::patch('/users/{user}/toggle-active', [UserController::class, 'toggleActive']);
         Route::apiResource('users', UserController::class);
     });
