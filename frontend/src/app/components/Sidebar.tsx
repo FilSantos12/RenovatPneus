@@ -10,7 +10,8 @@ import {
   LogOut,
   DollarSign,
   Wrench,
-  BarChart2
+  BarChart2,
+  Settings as SettingsIcon
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useState, useEffect } from 'react';
@@ -51,6 +52,7 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
     { path: '/historico',  icon: History,    label: 'Histórico',   roles: ['adm', 'operador'] },
     { path: '/relatorios', icon: BarChart2,  label: 'Relatórios',  roles: ['adm'] },
     { path: '/usuarios',   icon: Users,      label: 'Usuários',    roles: ['adm'] },
+    { path: '/configuracoes', icon: SettingsIcon, label: 'Configurações', roles: ['adm'] },
   ];
 
   const filteredMenuItems = menuItems.filter((item) =>

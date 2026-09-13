@@ -7,6 +7,7 @@ import { Saida } from './pages/Saida';
 import { Etiquetas } from './pages/Etiquetas';
 import { Historico } from './pages/Historico';
 import { Usuarios } from './pages/Usuarios';
+import { Configuracoes } from './pages/Configuracoes';
 import { RelatoriosPage } from './pages/Relatorios/RelatoriosPage';
 import { Financas } from './pages/Financas';
 import { Servicos } from './pages/Servicos';
@@ -75,6 +76,14 @@ export const router = createBrowserRouter([
         element: (
           <ProtectedRoute requiredRole="adm">
             <Usuarios />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: '/configuracoes',
+        element: (
+          <ProtectedRoute requiredRole="adm">
+            <Configuracoes />
           </ProtectedRoute>
         ),
       },

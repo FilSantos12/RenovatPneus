@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { FileSpreadsheet, FileText, Search, BarChart2 } from 'lucide-react'
 import { useEntriesReport, useSalesReport, useServicesReport, type ReportFilters } from '@/hooks/useReports'
 import { useUsers } from '@/hooks/useUsers'
 import { useProducts } from '@/hooks/useProducts'
 import { useServices } from '@/hooks/useServices'
+import { usePeriodCurrent } from '@/hooks/usePeriod'
 import { exportEntriesToExcel, exportSalesToExcel, exportServicesToExcel, exportReportToPDF } from '@/lib/export'
 import type { EntryReportItem, SaleReportItem, ServiceReportItem } from '@/app/types'
 
@@ -38,14 +39,6 @@ const formatDate = (iso: string) =>
 const formatMoney = (value: number) =>
   Number(value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
-function getMonthRange(): { start: string; end: string } {
-  const now = new Date()
-  const y = now.getFullYear()
-  const m = String(now.getMonth() + 1).padStart(2, '0')
-  const lastDay = new Date(y, now.getMonth() + 1, 0).getDate()
-  return { start: `${y}-${m}-01`, end: `${y}-${m}-${String(lastDay).padStart(2, '0')}` }
-}
-
 const inputCls =
   'h-10 px-3 bg-[#F5F5F5] border-2 border-transparent rounded-xl text-sm focus:outline-none focus:border-[#F97316] transition-colors'
 
@@ -57,13 +50,13 @@ const tabCls = (active: boolean) =>
   }`
 
 export function RelatoriosPage() {
-  const { start, end } = getMonthRange()
+  const { data: periodData } = usePeriodCurrent()
 
   const [tab, setTab] = useState<Tab>('entradas')
 
   const [formFilters, setFormFilters] = useState({
-    start_date: start,
-    end_date: end,
+    start_date: '',
+    end_date: '',
     user_id: '',
     product_id: '',
     service_id: '',
@@ -71,9 +64,21 @@ export function RelatoriosPage() {
 
   const [submitted, setSubmitted] = useState(false)
   const [activeFilters, setActiveFilters] = useState<ReportFilters>({
-    start_date: start,
-    end_date: end,
+    start_date: '',
+    end_date: '',
   })
+
+  // Preenche o período default (dia_inicio_mes configurado) assim que
+  // /api/period/current responder — só na primeira carga, sem sobrescrever
+  // se o usuário já tiver alterado os campos manualmente.
+  useEffect(() => {
+    if (periodData && !formFilters.start_date && !formFilters.end_date) {
+      const start = periodData.start.slice(0, 10)
+      const end = periodData.end.slice(0, 10)
+      setFormFilters(f => ({ ...f, start_date: start, end_date: end }))
+      setActiveFilters({ start_date: start, end_date: end })
+    }
+  }, [periodData])
 
   const { data: usersData }    = useUsers()
   const { data: productsData } = useProducts()
